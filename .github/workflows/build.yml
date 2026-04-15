@@ -1,4 +1,4 @@
-name: Win11 PRO W10UI FINAL CLEAN
+name: Win11 PRO W10UI FINAL KB5082052
 
 on:
   workflow_dispatch:
@@ -27,8 +27,9 @@ jobs:
           mkdir C:\ISO
           mkdir C:\out
           mkdir C:\drv
+          mkdir C:\updates
 
-      # DOWNLOAD BASE
+      # BASE
       - name: Baixar base
         shell: powershell
         run: |
@@ -37,14 +38,13 @@ jobs:
           curl.exe -L -o C:\work\base.zip.003 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003
           curl.exe -L -o C:\work\base.zip.004 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004
 
-      # EXTRAIR BASE
       - name: Extrair base
         shell: powershell
         run: |
           & "C:\Program Files\7-Zip\7z.exe" x C:\work\base.zip.001 -oC:\base -y
 
-      # LOCALIZAR FILES + ISO
-      - name: Localizar base
+      # LOCALIZAR
+      - name: Localizar Files + ISO
         id: path
         shell: powershell
         run: |
@@ -69,18 +69,18 @@ jobs:
           Remove-Item C:\base\*.zip* -Force -ErrorAction SilentlyContinue
           Remove-Item $env:TEMP\* -Recurse -Force -ErrorAction SilentlyContinue
 
-      # SOMENTE PRO (INDEX 4)
+      # INDEX 4 PRO
       - name: Forçar PRO
         shell: powershell
         run: |
           dism /Export-Image `
           /SourceImageFile:C:\ISO\sources\install.wim `
           /SourceIndex:4 `
-          /DestinationImageFile:C:\ISO\sources\install_new.wim `
+          /DestinationImageFile:C:\ISO\sources\install_pro.wim `
           /Compress:max
 
           Remove-Item C:\ISO\sources\install.wim
-          Rename-Item C:\ISO\sources\install_new.wim install.wim
+          Rename-Item C:\ISO\sources\install_pro.wim install.wim
 
       # DRIVER NVIDIA
       - name: Driver NVIDIA
@@ -89,42 +89,27 @@ jobs:
           curl.exe -L -o C:\drv\nv.exe https://us.download.nvidia.com/Windows/342.01/342.01-desktop-win10-64bit-international.exe
           & "C:\Program Files\7-Zip\7z.exe" x C:\drv\nv.exe -oC:\drv\nv -y
           mkdir "${{ steps.path.outputs.files }}\Drivers" -Force
-          Copy-Item C:\drv\nv\Display.Driver\*.inf "${{ steps.path.outputs.files }}\Drivers" -Recurse -Force
+          Copy-Item C:\drv\nv\Display.Driver "${{ steps.path.outputs.files }}\Drivers" -Recurse -Force
           Remove-Item C:\drv -Recurse -Force
 
-      # UUP (UPDATES)
-      - name: Baixar UUP
+      # UPDATE MSU (KB5082052)
+      - name: Baixar MSU mais recente
         shell: powershell
         run: |
-          Invoke-WebRequest -Uri "https://github.com/uup-dump/uup-dump/releases/latest/download/uup_download_windows.cmd.zip" -OutFile "C:\base\uup.zip"
+          curl.exe -L -o C:\updates\kb.msu https://catalog.s.download.windowsupdate.com/c/msdownload/update/software/updt/2026/04/windows11.0-kb5082052-x64.msu
 
-      - name: Extrair UUP
+      - name: Copiar update
         shell: powershell
         run: |
-          & "C:\Program Files\7-Zip\7z.exe" x C:\base\uup.zip -oC:\base\uup -y
-
-      - name: Rodar UUP
-        shell: cmd
-        working-directory: C:\base\uup
-        run: call uup_download_windows.cmd
-
-      - name: Copiar updates
-        shell: powershell
-        run: |
-          Copy-Item C:\base\uup\UUPs\* "${{ steps.path.outputs.files }}" -Recurse -Force
-
-      # LIMPEZA UUP
-      - name: Limpeza UUP
-        shell: powershell
-        run: |
-          Remove-Item C:\base\uup -Recurse -Force
-          Remove-Item C:\base\uup.zip -Force
+          Copy-Item C:\updates\*.msu "${{ steps.path.outputs.files }}" -Force
+          Remove-Item C:\updates -Recurse -Force
 
       # CONFIG W10UI
       - name: Configurar W10UI
         shell: powershell
         run: |
           $ini = Join-Path "${{ steps.path.outputs.files }}" "W10UI.ini"
+
           (Get-Content $ini) `
           -replace 'Target\s*=.*',"Target=C:\ISO" `
           -replace 'AutoStart\s*=.*',"AutoStart=1" `
@@ -134,7 +119,7 @@ jobs:
           -replace 'wim2esd\s*=.*',"wim2esd=1" `
           | Set-Content $ini
 
-      # LIMPEZA CRÍTICA
+      # LIMPEZA PESADA (ANTI ERRO ESPAÇO)
       - name: Limpeza antes do W10UI
         shell: powershell
         run: |
@@ -142,14 +127,14 @@ jobs:
           Remove-Item $env:TEMP\* -Recurse -Force -ErrorAction SilentlyContinue
           Get-PSDrive C
 
-      # W10UI (FAZ TUDO)
+      # W10UI
       - name: Rodar W10UI
         shell: cmd
         working-directory: ${{ steps.path.outputs.files }}
         run: call W10UI.cmd
 
-      # ISO FINAL
-      - name: Encontrar ISO
+      # PEGAR ISO
+      - name: Encontrar ISO final
         id: final
         shell: powershell
         run: |
@@ -164,7 +149,7 @@ jobs:
           & "C:\Program Files\7-Zip\7z.exe" a -tzip -v1900m C:\out\ISO.zip "${{ steps.final.outputs.iso }}"
 
       # LIMPEZA FINAL
-      - name: Limpeza final
+      - name: Limpeza final total
         shell: powershell
         run: |
           Remove-Item C:\ISO -Recurse -Force -ErrorAction SilentlyContinue
@@ -175,7 +160,7 @@ jobs:
       - name: Upload Release
         uses: ncipollo/release-action@v1
         with:
-          tag: win11-final-${{ github.run_id }}
-          name: Win11 PRO FINAL W10UI CLEAN
+          tag: win11-kb5082052-${{ github.run_id }}
+          name: Win11 PRO FINAL KB5082052
           artifacts: C:\out\ISO.zip*
           token: ${{ github.token }}
