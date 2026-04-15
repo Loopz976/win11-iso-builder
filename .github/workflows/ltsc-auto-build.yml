@@ -1,133 +1,90 @@
-name: LTSC AUTO BUILD (FULL)
+name: LTSC AUTO BUILD (Base + Prepare)
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: windows-2022
-    timeout-minutes: 360
 
     steps:
 
-    # 🔹 VARIÁVEIS
-    - name: Definir variáveis
-      shell: powershell
-      run: |
-        echo "ISO_NAME=source.iso" >> $env:GITHUB_ENV
-        echo "WORK_DIR=work" >> $env:GITHUB_ENV
-        echo "MOUNT_DIR=mount" >> $env:GITHUB_ENV
-        echo "OUT_NAME=LTSC2021_UPDATED" >> $env:GITHUB_ENV
-        echo "TAG_NAME=ltsc-final-${{ github.run_id }}" >> $env:GITHUB_ENV
+    # 🔹 CACHE DA ISO
+    - name: Cache ISO
+      id: cache-iso
+      uses: actions/cache@v4
+      with:
+        path: source.iso
+        key: ltsc-iso-v1
 
-    # 🔹 BAIXAR PARTES DO RELEASE
+    # 🔹 BAIXAR PARTES (SE NÃO TEM CACHE)
     - name: Baixar partes da ISO
+      if: steps.cache-iso.outputs.cache-hit != 'true'
       run: |
-        curl -L -o part1.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
-        curl -L -o part1.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
-        curl -L -o part1.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
+        curl -L -o part.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
+        curl -L -o part.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
+        curl -L -o part.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
     # 🔹 INSTALAR 7ZIP
     - name: Instalar 7zip
+      if: steps.cache-iso.outputs.cache-hit != 'true'
       run: choco install 7zip -y
 
     # 🔹 EXTRAIR ISO
     - name: Extrair ISO
+      if: steps.cache-iso.outputs.cache-hit != 'true'
       shell: powershell
       run: |
-        & "C:\Program Files\7-Zip\7z.exe" x part1.7z.001 -aoa
-        Rename-Item *.iso $env:ISO_NAME
+        & "C:\Program Files\7-Zip\7z.exe" x part.7z.001 -aoa
+
+    # 🔹 PADRONIZAR NOME
+    - name: Padronizar ISO
+      if: steps.cache-iso.outputs.cache-hit != 'true'
+      shell: powershell
+      run: |
+        $iso = Get-ChildItem *.iso | Select-Object -First 1
+        Rename-Item $iso.Name source.iso
 
     # 🔹 LIMPAR PARTES
     - name: Limpar partes
+      if: steps.cache-iso.outputs.cache-hit != 'true'
       shell: powershell
       run: |
         Remove-Item *.7z* -Force -ErrorAction SilentlyContinue
 
-    # 🔹 EXTRAIR ISO PARA PASTA (CORRETO)
-    - name: Extrair ISO (estrutura)
+    # 🔹 VALIDAR ISO
+    - name: Validar ISO
       shell: powershell
       run: |
-        New-Item -ItemType Directory -Path $env:WORK_DIR
-        & "C:\Program Files\7-Zip\7z.exe" x $env:ISO_NAME -o$env:WORK_DIR -aoa
+        if (Test-Path "source.iso") {
+          Write-Host "ISO pronta"
+        } else {
+          Write-Error "ISO não encontrada"
+          exit 1
+        }
 
+    # 🔹 EXTRAIR ISO PARA PASTA (FORMA CORRETA)
+    - name: Criar pasta base
+      run: mkdir work
+
+    - name: Extrair ISO para pasta
+      shell: powershell
+      run: |
+        & "C:\Program Files\7-Zip\7z.exe" x source.iso -owork -aoa
+
+    # 🔹 REMOVER ISO (ECONOMIA DE ESPAÇO)
     - name: Remover ISO original
-      run: del source.iso
-
-    # 🔹 BAIXAR UPDATES (OFICIAL)
-    - name: Baixar updates
-      run: |
-        mkdir updates
-        curl -L -o updates\kb1.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/ee9e2a08-c29f-42cb-bdbd-b204ed4b86af"
-        curl -L -o updates\kb2.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/3ae35ada-a348-4a74-8e22-575f8689e441"
-        curl -L -o updates\kb3.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/86594075-c967-4974-a055-5b6db3058d50"
-
-    # 🔹 MONTAR WIM
-    - name: Preparar mount
       shell: powershell
       run: |
-        mkdir $env:MOUNT_DIR
+        Remove-Item source.iso -Force
 
-    - name: Montar imagem
-      run: |
-        dism /Mount-Wim /WimFile:work\sources\install.wim /index:1 /MountDir:mount
-
-    # 🔹 INTEGRAR UPDATES
-    - name: Integrar updates
-      run: |
-        for %f in (updates\*.cab) do dism /Image:mount /Add-Package /PackagePath:%f
-
-    # 🔹 LIMPEZA
-    - name: Limpar imagem
-      run: |
-        dism /Image:mount /Cleanup-Image /StartComponentCleanup /ResetBase
-
-    # 🔹 DESMONTAR
-    - name: Commit imagem
-      run: |
-        dism /Unmount-Wim /MountDir:mount /Commit
-
-    # 🔹 CONVERTER PARA ESD (ULTRA COMPACTO)
-    - name: Converter para ESD
-      run: |
-        dism /Export-Image /SourceImageFile:work\sources\install.wim /SourceIndex:1 /DestinationImageFile:work\sources\install.esd /Compress:recovery
-
-    - name: Remover WIM
-      run: del work\sources\install.wim
-
-    # 🔹 CRIAR ISO FINAL
-    - name: Criar ISO
-      run: |
-        oscdimg -bwork\boot\etfsboot.com -u2 -h -m -o -lLTSC work LTSC_FINAL.iso
-
-    # 🔹 COMPACTAR
-    - name: Compactar final
+    # 🔹 VALIDAR ESTRUTURA
+    - name: Validar estrutura
       shell: powershell
       run: |
-        & "C:\Program Files\7-Zip\7z.exe" a -t7z -v1900m -mx=9 "$env:OUT_NAME.7z" LTSC_FINAL.iso
-
-    # 🔹 HASH
-    - name: Gerar hash
-      run: certutil -hashfile LTSC_FINAL.iso SHA256 > hash.txt
-
-    # 🔹 RELEASE FINAL
-    - name: Criar Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ env.TAG_NAME }}
-        name: LTSC 2021 UPDATED
-        body: |
-          Windows 10 LTSC 2021 atualizado automaticamente
-
-          • Updates integrados
-          • ISO otimizada (ESD)
-          • Build automático
-
-        files: |
-          LTSC2021_UPDATED.7z*
-          hash.txt
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if (Test-Path "work\sources\install.wim") {
+          Write-Host "Base pronta para integração"
+        } else {
+          Write-Error "install.wim não encontrado"
+          exit 1
+        }
