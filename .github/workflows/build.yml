@@ -1,4 +1,4 @@
-name: Win11 PRO FINAL ABSOLUTO FIX
+name: Win11 PRO FINAL ABSOLUTO
 
 on:
   workflow_dispatch:
@@ -14,11 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 7ZIP
       - name: Instalar 7zip
         run: choco install 7zip -y
 
-      # PASTAS
       - name: Preparar ambiente
         shell: powershell
         run: |
@@ -29,7 +27,6 @@ jobs:
           mkdir C:\drv
           mkdir C:\updates
 
-      # BASE
       - name: Baixar base
         shell: powershell
         run: |
@@ -43,7 +40,6 @@ jobs:
         run: |
           & "C:\Program Files\7-Zip\7z.exe" x C:\work\base.zip.001 -oC:\base -y
 
-      # LOCALIZAR
       - name: Localizar Files + ISO
         id: path
         shell: powershell
@@ -56,13 +52,11 @@ jobs:
           "files=$($files.FullName)" >> $env:GITHUB_OUTPUT
           "iso=$($iso.FullName)" >> $env:GITHUB_OUTPUT
 
-      # EXTRAIR ISO
       - name: Extrair ISO
         shell: powershell
         run: |
           & "C:\Program Files\7-Zip\7z.exe" x "${{ steps.path.outputs.iso }}" -oC:\ISO -y
 
-      # LIMPEZA INICIAL
       - name: Limpeza inicial
         shell: powershell
         run: |
@@ -70,7 +64,6 @@ jobs:
           Remove-Item C:\base\*.zip* -Force -ErrorAction SilentlyContinue
           Remove-Item $env:TEMP\* -Recurse -Force -ErrorAction SilentlyContinue
 
-      # GARANTIR INSTALL.WIM
       - name: Garantir install.wim
         shell: powershell
         run: |
@@ -82,20 +75,13 @@ jobs:
             }
           }
 
-      # INDEX 4 PRO
-      - name: Forçar PRO
+      - name: Forçar PRO (Index 4)
         shell: powershell
         run: |
-          dism /Export-Image `
-          /SourceImageFile:C:\ISO\sources\install.wim `
-          /SourceIndex:4 `
-          /DestinationImageFile:C:\ISO\sources\install_pro.wim `
-          /Compress:max
-
+          dism /Export-Image /SourceImageFile:C:\ISO\sources\install.wim /SourceIndex:4 /DestinationImageFile:C:\ISO\sources\install_pro.wim /Compress:max
           Remove-Item C:\ISO\sources\install.wim
           Rename-Item C:\ISO\sources\install_pro.wim install.wim
 
-      # DRIVER NVIDIA (OS ONLY)
       - name: Driver NVIDIA (OS only)
         shell: powershell
         run: |
@@ -107,7 +93,6 @@ jobs:
 
           Remove-Item C:\drv -Recurse -Force
 
-      # UPDATE MSU
       - name: Baixar MSU com retry
         shell: powershell
         run: |
@@ -130,8 +115,7 @@ jobs:
           Copy-Item C:\updates\*.msu "${{ steps.path.outputs.files }}" -Force
           Remove-Item C:\updates -Recurse -Force
 
-      # CONFIG W10UI (FIX FINAL)
-      - name: Configurar W10UI
+      - name: Configurar W10UI (fix definitivo)
         shell: powershell
         run: |
           $ini = Join-Path "${{ steps.path.outputs.files }}" "W10UI.ini"
@@ -156,23 +140,19 @@ SkipWinRE=1
 
           Get-Content $ini
 
-      # LIMPEZA PESADA
       - name: Limpeza antes do W10UI
         shell: powershell
         run: |
           dism /Cleanup-Wim
           Remove-Item C:\Windows\Temp\* -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $env:TEMP\* -Recurse -Force -ErrorAction SilentlyContinue
-          Get-PSDrive C
 
-      # W10UI
       - name: Rodar W10UI
         shell: cmd
         working-directory: ${{ steps.path.outputs.files }}
         run: call W10UI.cmd
 
-      # ISO FINAL
-      - name: Encontrar ISO
+      - name: Encontrar ISO final
         id: final
         shell: powershell
         run: |
@@ -180,13 +160,11 @@ SkipWinRE=1
           if (!$iso) { throw "ISO não encontrada" }
           "iso=$($iso.FullName)" >> $env:GITHUB_OUTPUT
 
-      # COMPACTAR
       - name: Compactar ISO
         shell: powershell
         run: |
           & "C:\Program Files\7-Zip\7z.exe" a -tzip -v1900m C:\out\ISO.zip "${{ steps.final.outputs.iso }}"
 
-      # LIMPEZA FINAL
       - name: Limpeza final
         shell: powershell
         run: |
@@ -194,7 +172,6 @@ SkipWinRE=1
           Remove-Item C:\base -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $env:TEMP\* -Recurse -Force -ErrorAction SilentlyContinue
 
-      # RELEASE
       - name: Upload Release
         uses: ncipollo/release-action@v1
         with:
