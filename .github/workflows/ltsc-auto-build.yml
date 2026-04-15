@@ -1,4 +1,4 @@
-name: LTSC AUTO BUILD (FINAL DEFINITIVO)
+name: LTSC AUTO BUILD (FINAL ENTERPRISE)
 
 on:
   workflow_dispatch:
@@ -73,29 +73,21 @@ jobs:
         curl.exe -L "https://uupdump.net/get.php?id=1405899d-8302-4010-ad25-3ad906c62200&pack=0&edition=updateOnly" -o uup.html
 
     # ================================
-    # 🔥 DOWNLOAD + RENAME AUTOMÁTICO
+    # 🔥 DOWNLOAD + RENAME CABs
     # ================================
     - name: Baixar CABs corretamente
       shell: powershell
       run: |
         mkdir updates
-
         $html = Get-Content uup.html -Raw
 
-        # links reais
-        $pattern = 'href="(http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/[^"]+)"'
-        $matches = [regex]::Matches($html, $pattern)
+        $links = [regex]::Matches($html, 'href="(http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/[^"]+)"')
+        $names = [regex]::Matches($html, 'rename "([^"]+)" "([^"]+)"')
 
-        # nomes corretos do script
-        $renamePattern = 'rename "([^"]+)" "([^"]+)"'
-        $renameMatches = [regex]::Matches($html, $renamePattern)
-
-        for ($i = 0; $i -lt $matches.Count; $i++) {
-          $url = $matches[$i].Groups[1].Value
-          $correctName = $renameMatches[$i].Groups[2].Value
-
-          Write-Host "Baixando $correctName"
-          curl.exe -L $url -o "updates\$correctName"
+        for ($i = 0; $i -lt $links.Count; $i++) {
+          $url = $links[$i].Groups[1].Value
+          $name = $names[$i].Groups[2].Value
+          curl.exe -L $url -o "updates\$name"
         }
 
     # ================================
@@ -132,7 +124,6 @@ jobs:
         }
 
         foreach ($pkg in $rest) {
-          Write-Host "Integrando $($pkg.Name)"
           dism /Image:mount /Add-Package /PackagePath:$pkg.FullName
         }
 
@@ -152,12 +143,38 @@ jobs:
       run: |
         dism /Unmount-Wim /MountDir:mount /Commit
 
+    # ================================
+    # 🔥 VALIDAR + CAPTURAR VERSÃO
+    # ================================
+    - name: Validar versão e capturar build
+      id: version
+      shell: powershell
+      run: |
+        mkdir verify
+        dism /Mount-Wim /WimFile:work\sources\install.wim /index:1 /MountDir:verify
+
+        reg load HKLM\OFFSOFT verify\Windows\System32\Config\SOFTWARE
+
+        $build = (Get-ItemProperty "HKLM:\OFFSOFT\Microsoft\Windows NT\CurrentVersion").CurrentBuild
+        $ubr = (Get-ItemProperty "HKLM:\OFFSOFT\Microsoft\Windows NT\CurrentVersion").UBR
+
+        $full = "$build.$ubr"
+        echo "version=$full" >> $env:GITHUB_OUTPUT
+
+        if ($ubr -lt 7184) {
+          Write-Error "Update não aplicado corretamente!"
+          exit 1
+        }
+
+        reg unload HKLM\OFFSOFT
+        dism /Unmount-Wim /MountDir:verify /Discard
+
     # 🔥 LIMPAR UPDATES
     - name: Limpar updates
       run: rmdir /s /q updates
 
     # ================================
-    # 🔥 ESD (MAX)
+    # 🔥 ESD
     # ================================
     - name: Converter ESD
       shell: powershell
@@ -170,7 +187,7 @@ jobs:
         del work\sources\install.wim
 
     # ================================
-    # 🔥 ISO
+    # 🔥 ISO COM NOME DINÂMICO
     # ================================
     - name: Instalar ADK
       run: choco install windows-adk -y
@@ -178,8 +195,13 @@ jobs:
     - name: Criar ISO
       shell: powershell
       run: |
+        $ver = "${{ steps.version.outputs.version }}"
+        $label = "WIN10_LTSC_$ver"
+        $isoName = "Windows 10 LTSC 21H2 ($ver).iso"
+
         $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
-        & $oscdimg -bwork\boot\etfsboot.com -u2 -h -m -o -lLTSC_FINAL work final.iso
+
+        & $oscdimg -bwork\boot\etfsboot.com -u2 -h -m -o -l$label work "$isoName"
 
     # 🔥 LIMPAR WORK
     - name: Limpar work
@@ -191,10 +213,9 @@ jobs:
     - name: Split ISO
       shell: powershell
       run: |
-        & "C:\Program Files\7-Zip\7z.exe" a split.7z final.iso -v1900m
-
-    - name: Remover ISO
-      run: del final.iso
+        $file = Get-ChildItem *.iso | Select-Object -First 1
+        & "C:\Program Files\7-Zip\7z.exe" a split.7z $file.Name -v1900m
+        del $file.Name
 
     # ================================
     # 📦 UPLOAD FINAL
