@@ -35,11 +35,13 @@ jobs:
           $iso = Get-ChildItem -Path C:\work\extract\Files -Recurse -Filter "Win11*.iso" | Select-Object -First 1
 
           if (-not $iso) {
+            Write-Host "Conteúdo encontrado:"
             Get-ChildItem -Recurse C:\work\extract
             throw "ISO não encontrada"
           }
 
           Copy-Item $iso.FullName C:\work\base.iso
+          Write-Host "ISO encontrada:" $iso.FullName
 
       # 📦 Extrair ISO
       - name: Extrair ISO
@@ -47,7 +49,7 @@ jobs:
         run: |
           & "C:\Program Files\7-Zip\7z.exe" x C:\work\base.iso -oC:\iso -y
 
-      # 🔍 Detectar install
+      # 🔍 Detectar install.wim ou install.esd
       - name: Detectar imagem
         shell: powershell
         run: |
@@ -59,22 +61,50 @@ jobs:
             throw "install.wim/esd não encontrado"
           }
 
-      # 🔄 Exportar PRO
+      # 🔄 Exportar PRO (index 4)
       - name: Exportar PRO
         run: |
           dism /Export-Image /SourceImageFile:$env:IMG /SourceIndex:4 /DestinationImageFile:C:\iso\sources\install.wim /Compress:max
 
-      # 🧹 Limpar ESD antigo
-      - name: Limpar imagem antiga
+      # 🧹 Remover ESD antigo
+      - name: Limpar ESD
         shell: powershell
         run: |
           Remove-Item C:\iso\sources\install.esd -ErrorAction SilentlyContinue
 
-      # 💿 Criar ISO com 7zip (SEM ADK)
+      # 🔧 Instalar ADK + WinPE (GARANTIDO)
+      - name: Instalar ADK + WinPE
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2196224" -OutFile C:\work\adksetup.exe
+          Start-Process C:\work\adksetup.exe -ArgumentList "/quiet /norestart /features OptionId.DeploymentTools" -Wait
+
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2196127" -OutFile C:\work\adkwinpe.exe
+          Start-Process C:\work\adkwinpe.exe -ArgumentList "/quiet /norestart" -Wait
+
+      # 🔍 Localizar oscdimg corretamente
+      - name: Encontrar oscdimg
+        shell: powershell
+        run: |
+          $oscdimg = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe | Select-Object -First 1
+
+          if (-not $oscdimg) {
+            throw "oscdimg.exe NÃO encontrado"
+          }
+
+          echo "OSCDIMG=$($oscdimg.FullName)" >> $env:GITHUB_ENV
+          Write-Host "oscdimg encontrado em:" $oscdimg.FullName
+
+      # 💿 Criar ISO FINAL (OFICIAL)
       - name: Criar ISO FINAL
         shell: powershell
         run: |
-          & "C:\Program Files\7-Zip\7z.exe" a -tiso C:\work\Win11_23H2_Pro_Final.iso C:\iso\*
+          & "$env:OSCDIMG" `
+            -bC:\iso\boot\etfsboot.com `
+            -u2 -h -m `
+            -lWIN11_23H2_PRO_FINAL `
+            C:\iso `
+            C:\work\Win11_23H2_Pro_Final.iso
 
       # 📦 Compactar ISO
       - name: Compactar ISO
@@ -82,7 +112,7 @@ jobs:
         run: |
           & "C:\Program Files\7-Zip\7z.exe" a -tzip C:\work\Win11_23H2_Pro_Final.zip C:\work\Win11_23H2_Pro_Final.iso -v1900m
 
-      # 📤 Upload
+      # 📤 Upload Release
       - name: Upload Release
         uses: softprops/action-gh-release@v1
         with:
@@ -93,6 +123,6 @@ jobs:
 
             - Edition: Professional (Index 4)
             - Clean base
-            - No ADK dependency
+            - Official boot ISO (Microsoft ADK)
             - Split 1900MB
           files: C:\work\Win11_23H2_Pro_Final.zip.*
