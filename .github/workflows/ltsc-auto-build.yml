@@ -1,4 +1,4 @@
-name: BUILD ISO LTSC FINAL (FIX DOWNLOAD)
+name: BUILD ISO LTSC FINAL (FINAL DEFINITIVE)
 
 on:
   workflow_dispatch:
@@ -17,12 +17,11 @@ jobs:
           New-Item -ItemType Directory -Force -Path C:\Files | Out-Null
           New-Item -ItemType Directory -Force -Path work | Out-Null
 
-      # DOWNLOAD ISO (CORRIGIDO AQUI 🔥)
-      - name: Baixar ISO (3 partes)
+      # ISO DOWNLOAD
+      - name: Baixar ISO
         shell: powershell
         run: |
           Set-Location work
-
           curl.exe -L -o W10LTSC2021.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
           curl.exe -L -o W10LTSC2021.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
           curl.exe -L -o W10LTSC2021.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
@@ -37,6 +36,7 @@ jobs:
         shell: powershell
         run: |
           $iso = Get-ChildItem work\iso\*.iso | Select-Object -First 1
+          if (-not $iso) { throw "ISO não encontrada" }
           Move-Item $iso.FullName C:\Files\ -Force
 
       - name: Limpar partes
@@ -86,27 +86,14 @@ jobs:
           Remove-Item work\nvidia -Recurse -Force
           Remove-Item work\nvidia.exe -Force
 
-      # INI (ISODIR DIRETO)
-      - name: Criar INI
+      # 🔥 MONTAR ISO (CHAVE)
+      - name: Montar ISO
         shell: powershell
         run: |
           $iso = (Get-ChildItem C:\Files\*.iso | Select-Object -First 1).FullName
-
-          Set-Content C:\Files\W10UI.ini "[W10UI-Configuration]"
-          Add-Content C:\Files\W10UI.ini "ISO=1"
-          Add-Content C:\Files\W10UI.ini "ISODir=$iso"
-          Add-Content C:\Files\W10UI.ini ""
-          Add-Content C:\Files\W10UI.ini "AutoStart=1"
-          Add-Content C:\Files\W10UI.ini "AddUpdates=1"
-          Add-Content C:\Files\W10UI.ini "AddDrivers=1"
-          Add-Content C:\Files\W10UI.ini ""
-          Add-Content C:\Files\W10UI.ini "Cleanup=1"
-          Add-Content C:\Files\W10UI.ini "ResetBase=1"
-          Add-Content C:\Files\W10UI.ini ""
-          Add-Content C:\Files\W10UI.ini "Net35=1"
-          Add-Content C:\Files\W10UI.ini "wim2esd=1"
-          Add-Content C:\Files\W10UI.ini ""
-          Add-Content C:\Files\W10UI.ini "Drv_Source=\Drivers"
+          $mount = Mount-DiskImage -ImagePath $iso -PassThru
+          $drive = ($mount | Get-Volume).DriveLetter
+          echo "DRIVE=$drive" >> $env:GITHUB_ENV
 
       # DEBUG
       - name: Verificar estrutura
@@ -114,15 +101,23 @@ jobs:
         run: |
           Write-Host "FILES:"
           Get-ChildItem C:\Files
-          Write-Host "DRIVERS:"
-          Get-ChildItem C:\Files\Drivers\OS
+          Write-Host "DRIVE:"
+          echo $env:DRIVE
 
-      # EXECUÇÃO
-      - name: Executar W10UI
+      # 🚀 EXECUÇÃO FINAL (100% AUTOMÁTICA)
+      - name: Executar W10UI automático
         shell: powershell
         run: |
           Set-Location C:\Files
-          cmd /c W10UI.cmd
+          $d = $env:DRIVE
+
+          $input = @"
+1
+$d:\
+0
+"@
+
+          $input | cmd /c W10UI.cmd
 
       # OUTPUT
       - name: Organizar ISO
@@ -131,7 +126,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path output | Out-Null
           Move-Item C:\Files\*.iso output\ -Force
 
-      - name: Compactar
+      - name: Compactar ISO
         shell: powershell
         run: |
           Set-Location output
