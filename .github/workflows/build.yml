@@ -1,4 +1,4 @@
-name: Win11 PRO W10UI FULL AUTO CLEAN FINAL
+name: Win11 PRO W10UI FINAL CLEAN
 
 on:
   workflow_dispatch:
@@ -28,8 +28,8 @@ jobs:
           mkdir C:\out
           mkdir C:\drv
 
-      # BAIXAR BASE
-      - name: Baixar partes
+      # DOWNLOAD BASE
+      - name: Baixar base
         shell: powershell
         run: |
           curl.exe -L -o C:\work\base.zip.001 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.001
@@ -50,7 +50,8 @@ jobs:
         run: |
           $files = Get-ChildItem C:\base -Recurse -Directory | Where {$_.Name -eq "Files"} | Select -First 1
           $iso = Get-ChildItem $files.FullName -Filter *.iso -Recurse | Select -First 1
-          if (!$files -or !$iso) { throw "Base inválida" }
+          if (!$files -or !$iso) { throw "Erro base" }
+
           "files=$($files.FullName)" >> $env:GITHUB_OUTPUT
           "iso=$($iso.FullName)" >> $env:GITHUB_OUTPUT
 
@@ -68,20 +69,20 @@ jobs:
           Remove-Item C:\base\*.zip* -Force -ErrorAction SilentlyContinue
           Remove-Item $env:TEMP\* -Recurse -Force -ErrorAction SilentlyContinue
 
-      # SOMENTE PRO
+      # SOMENTE PRO (INDEX 4)
       - name: Forçar PRO
         shell: powershell
         run: |
           dism /Export-Image `
           /SourceImageFile:C:\ISO\sources\install.wim `
           /SourceIndex:4 `
-          /DestinationImageFile:C:\ISO\sources\install_pro.wim `
+          /DestinationImageFile:C:\ISO\sources\install_new.wim `
           /Compress:max
 
           Remove-Item C:\ISO\sources\install.wim
-          Rename-Item C:\ISO\sources\install_pro.wim install.wim
+          Rename-Item C:\ISO\sources\install_new.wim install.wim
 
-      # DRIVER
+      # DRIVER NVIDIA
       - name: Driver NVIDIA
         shell: powershell
         run: |
@@ -91,7 +92,7 @@ jobs:
           Copy-Item C:\drv\nv\Display.Driver\*.inf "${{ steps.path.outputs.files }}\Drivers" -Recurse -Force
           Remove-Item C:\drv -Recurse -Force
 
-      # UUP
+      # UUP (UPDATES)
       - name: Baixar UUP
         shell: powershell
         run: |
@@ -112,7 +113,7 @@ jobs:
         run: |
           Copy-Item C:\base\uup\UUPs\* "${{ steps.path.outputs.files }}" -Recurse -Force
 
-      # LIMPEZA UUP (CRÍTICO)
+      # LIMPEZA UUP
       - name: Limpeza UUP
         shell: powershell
         run: |
@@ -133,19 +134,22 @@ jobs:
           -replace 'wim2esd\s*=.*',"wim2esd=1" `
           | Set-Content $ini
 
-      # LIMPEZA DISM
-      - name: Limpeza DISM
+      # LIMPEZA CRÍTICA
+      - name: Limpeza antes do W10UI
         shell: powershell
-        run: dism /Cleanup-Wim
+        run: |
+          dism /Cleanup-Wim
+          Remove-Item $env:TEMP\* -Recurse -Force -ErrorAction SilentlyContinue
+          Get-PSDrive C
 
-      # W10UI
+      # W10UI (FAZ TUDO)
       - name: Rodar W10UI
         shell: cmd
         working-directory: ${{ steps.path.outputs.files }}
         run: call W10UI.cmd
 
-      # PEGAR ISO FINAL
-      - name: ISO final
+      # ISO FINAL
+      - name: Encontrar ISO
         id: final
         shell: powershell
         run: |
@@ -154,13 +158,13 @@ jobs:
           "iso=$($iso.FullName)" >> $env:GITHUB_OUTPUT
 
       # COMPACTAR
-      - name: Compactar
+      - name: Compactar ISO
         shell: powershell
         run: |
           & "C:\Program Files\7-Zip\7z.exe" a -tzip -v1900m C:\out\ISO.zip "${{ steps.final.outputs.iso }}"
 
       # LIMPEZA FINAL
-      - name: Limpeza final total
+      - name: Limpeza final
         shell: powershell
         run: |
           Remove-Item C:\ISO -Recurse -Force -ErrorAction SilentlyContinue
@@ -172,6 +176,6 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: win11-final-${{ github.run_id }}
-          name: Win11 PRO W10UI FINAL CLEAN
+          name: Win11 PRO FINAL W10UI CLEAN
           artifacts: C:\out\ISO.zip*
           token: ${{ github.token }}
