@@ -1,4 +1,4 @@
-name: Build Win10 LTSC (FINAL BASE FIXED)
+name: Build Win10 LTSC (FINAL STABLE)
 
 on:
   workflow_dispatch:
@@ -20,16 +20,13 @@ jobs:
       # ================================
       # 🔥 DOWNLOAD ISO BASE CORRETA
       # ================================
-      - name: Baixar ISO base (release correto)
+      - name: Baixar ISO base
         shell: powershell
         run: |
           curl.exe -L -o base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
           curl.exe -L -o base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
           curl.exe -L -o base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
-      # ================================
-      # 🔥 EXTRAIR ISO BASE
-      # ================================
       - name: Extrair ISO base
         shell: powershell
         run: |
@@ -41,7 +38,7 @@ jobs:
         shell: powershell
         run: |
           $iso = Get-ChildItem D:\BASE -Recurse *.iso | Select-Object -First 1
-          echo file=$($iso.FullName)>>$env:GITHUB_OUTPUT
+          echo "file=$($iso.FullName)" >> $env:GITHUB_OUTPUT
 
       # ================================
       # 🔥 EXTRAIR ISO
@@ -66,8 +63,7 @@ jobs:
       # 🔥 PREPARAR W10UI
       # ================================
       - name: Baixar W10UI
-        run: |
-          git clone https://github.com/abbodi1406/WHD-Windows-Update.git D:\W10UI
+        run: git clone https://github.com/abbodi1406/WHD-Windows-Update.git D:\W10UI
 
       - name: Criar pastas
         run: |
@@ -75,9 +71,9 @@ jobs:
           mkdir D:\MOUNT
 
       # ================================
-      # 🔥 BAIXAR UPDATES AUTOMÁTICO
+      # 🔥 BAIXAR UPDATES UUP
       # ================================
-      - name: Baixar updates UUP
+      - name: Baixar updates
         shell: powershell
         run: |
           curl.exe -L "https://uupdump.net/get.php?id=1405899d-8302-4010-ad25-3ad906c62200&pack=0&edition=updateOnly" -o uup.html
@@ -85,6 +81,11 @@ jobs:
           $html = Get-Content uup.html -Raw
           $links = [regex]::Matches($html,'href="(http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/[^"]+)"')
           $names = [regex]::Matches($html,'rename "([^"]+)" "([^"]+)"')
+
+          if ($links.Count -ne $names.Count) {
+            Write-Error "Erro: links e nomes não batem"
+            exit 1
+          }
 
           for($i=0;$i -lt $links.Count;$i++){
             $url = $links[$i].Groups[1].Value
@@ -95,20 +96,22 @@ jobs:
           }
 
       # ================================
-      # 🔥 CONFIGURAR W10UI.ini
+      # 🔥 CONFIGURAR W10UI.ini (FIX)
       # ================================
       - name: Configurar INI
         shell: powershell
         run: |
-          Set-Content "D:\W10UI\W10UI.ini" @"
-_CabDir=D:\W10UI_TEMP
-_Target=D:\ISO\sources\install.wim
-_MountDir=D:\MOUNT
-AutoStart=1
-Cleanup=1
-ResetBase=1
-LCUwinre=1
-"@
+          $ini = @(
+            "_CabDir=D:\W10UI_TEMP",
+            "_Target=D:\ISO\sources\install.wim",
+            "_MountDir=D:\MOUNT",
+            "AutoStart=1",
+            "Cleanup=1",
+            "ResetBase=1",
+            "LCUwinre=1"
+          )
+
+          $ini | Set-Content "D:\W10UI\W10UI.ini" -Encoding ASCII
 
       # ================================
       # 🔥 RODAR W10UI
@@ -145,14 +148,14 @@ LCUwinre=1
           dism /Unmount-Wim /MountDir:D:\VERIFY /Discard
 
       # ================================
-      # 🔥 PEGAR ISO GERADA
+      # 🔥 PEGAR ISO FINAL
       # ================================
       - name: Encontrar ISO final
         id: finaliso
         shell: powershell
         run: |
-          $iso = Get-ChildItem D:\W10UI -Recurse *.iso | sort LastWriteTime -desc | select -first 1
-          echo file=$($iso.FullName)>>$env:GITHUB_OUTPUT
+          $iso = Get-ChildItem D:\W10UI -Recurse *.iso | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          echo "file=$($iso.FullName)" >> $env:GITHUB_OUTPUT
 
       # ================================
       # 🔥 SPLIT
