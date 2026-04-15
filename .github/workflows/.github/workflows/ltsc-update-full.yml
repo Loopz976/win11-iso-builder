@@ -1,0 +1,120 @@
+name: LTSC Updated ISO Builder
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 360
+
+    steps:
+    - name: Variáveis
+      shell: powershell
+      run: |
+        echo "ISO_URL=https://windows.timefa.de/10/ltsc/pt-br_windows_10_enterprise_ltsc_2021_x64_dvd_f318268e.iso" >> $env:GITHUB_ENV
+        echo "ISO_FILE=source.iso" >> $env:GITHUB_ENV
+        echo "WORK=work" >> $env:GITHUB_ENV
+        echo "MOUNT=mount" >> $env:GITHUB_ENV
+        echo "OUT=out" >> $env:GITHUB_ENV
+        echo "ARCH=W10LTSC2021_UPDATED" >> $env:GITHUB_ENV
+        echo "TAG=ltsc-updated-${{ github.run_id }}" >> $env:GITHUB_ENV
+
+    # 🔽 BAIXAR ISO
+    - name: Baixar ISO
+      run: |
+        curl -L --retry 5 --retry-delay 5 -o "$env:ISO_FILE" "$env:ISO_URL"
+
+    # 📂 PREPARAR
+    - name: Criar estrutura
+      run: |
+        mkdir $env:WORK
+        mkdir $env:MOUNT
+        mkdir $env:OUT
+        mkdir updates
+
+    # 📦 EXTRAIR ISO
+    - name: Extrair ISO
+      run: |
+        powershell Mount-DiskImage -ImagePath $env:ISO_FILE
+        $drive = (Get-DiskImage $env:ISO_FILE | Get-Volume).DriveLetter
+        robocopy "$drive`:\" $env:WORK /E
+        powershell Dismount-DiskImage -ImagePath $env:ISO_FILE
+
+    # 🔽 BAIXAR UPDATES (SEUS LINKS)
+    - name: Baixar updates oficiais
+      run: |
+        curl -L -o updates\01-SSU.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/ee9e2a08-c29f-42cb-bdbd-b204ed4b86af"
+        curl -L -o updates\02-KB.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/5081b4fd-6f6c-49af-8967-bd1d51c19e7f"
+        curl -L -o updates\03-KB.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/946714d8-ee36-4571-a5e1-fc6cf8007658"
+        curl -L -o updates\04-KB.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/86594075-c967-4974-a055-5b6db3058d50"
+        curl -L -o updates\05-KB.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/17bcecd9-6b16-4c3d-baa8-f678e2a5dba5"
+        curl -L -o updates\06-KB.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/62383f9f-8732-4028-a4e8-555b16047b47"
+        curl -L -o updates\07-KB.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/3ae35ada-a348-4a74-8e22-575f8689e441"
+
+    # 🔄 CONVERTER ESD → WIM (se necessário)
+    - name: Preparar install.wim
+      run: |
+        if exist "%WORK%\sources\install.esd" (
+          dism /Export-Image /SourceImageFile:%WORK%\sources\install.esd /SourceIndex:1 /DestinationImageFile:%WORK%\sources\install.wim /Compress:max
+          del %WORK%\sources\install.esd
+        )
+
+    # 🧱 MONTAR
+    - name: Montar imagem
+      run: |
+        dism /Mount-Wim /WimFile:%WORK%\sources\install.wim /index:1 /MountDir:%MOUNT%
+
+    # 🔧 INTEGRAR UPDATES
+    - name: Integrar updates
+      run: |
+        dism /Image:%MOUNT% /Add-Package /PackagePath:updates
+
+    # 🧹 LIMPEZA TOTAL
+    - name: Limpeza profunda
+      run: |
+        dism /Image:%MOUNT% /Cleanup-Image /StartComponentCleanup /ResetBase
+
+    # 💾 COMMIT
+    - name: Finalizar imagem
+      run: |
+        dism /Unmount-Wim /MountDir:%MOUNT% /Commit
+
+    # 🔄 CONVERTER PARA ESD (MÁXIMA COMPRESSÃO)
+    - name: Converter para ESD
+      run: |
+        dism /Export-Image /SourceImageFile:%WORK%\sources\install.wim /SourceIndex:1 /DestinationImageFile:%WORK%\sources\install.esd /Compress:recovery
+        del %WORK%\sources\install.wim
+
+    # 🧱 RECRIAR ISO
+    - name: Criar ISO final
+      run: |
+        oscdimg -m -o -u2 -udfver102 %WORK% %OUT%\final.iso
+
+    # 📦 7ZIP
+    - name: Instalar 7zip
+      run: choco install 7zip -y
+
+    # 📦 COMPACTAR
+    - name: Compactar ISO final
+      shell: powershell
+      run: |
+        & "C:\Program Files\7-Zip\7z.exe" a -t7z -v1900m -mx=9 "$env:ARCH.7z" "$env:OUT\final.iso"
+
+    # 🚀 RELEASE
+    - name: Criar Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.TAG }}
+        name: W10 LTSC 2021 Updated
+        body: |
+          Windows 10 LTSC 2021 atualizado
+
+          • Updates oficiais integrados
+          • Limpeza total (ResetBase)
+          • Compressão ESD (máxima)
+          • ISO pronta para instalação
+
+        files: W10LTSC2021_UPDATED.7z*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
