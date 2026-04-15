@@ -1,4 +1,4 @@
-name: Build ISO + Split + Release
+name: Build ISO + Split + Release (Local ZIP)
 
 on:
   workflow_dispatch:
@@ -9,30 +9,22 @@ jobs:
     timeout-minutes: 360
 
     steps:
-    - name: Baixar UUP dump zip (OneDrive fix)
-      shell: powershell
+    - name: Checkout do repositório
+      uses: actions/checkout@v4
+
+    - name: Ver arquivos
+      run: dir
+
+    - name: Extrair UUP ZIP
       run: |
-        $url = "https://1drv.ms/u/c/579080100cd71c41/IQDtC9_-n55VSajuyWiEOvt8AQKL9l00UNtApMK7mvPtKCk"
-        $output = "uup.zip"
+        powershell -Command "Expand-Archive -Path *.zip -DestinationPath uup"
 
-        $resp = Invoke-WebRequest -Uri $url -MaximumRedirection 10
-        $downloadUrl = $resp.Links | Where-Object { $_.href -like "*download*" } | Select-Object -First 1 -ExpandProperty href
-
-        if (-not $downloadUrl) {
-          $downloadUrl = $resp.BaseResponse.ResponseUri.AbsoluteUri
-        }
-
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $output
-
-    - name: Extrair UUP
-      run: powershell -Command "Expand-Archive -Path uup.zip -DestinationPath uup"
-
-    - name: Remover pause
+    - name: Remover pause do script
       run: |
         cd uup
         powershell -Command "(Get-Content uup_download_windows.cmd) -replace 'pause','' | Set-Content uup_download_windows.cmd"
 
-    - name: Rodar UUP (gera ISO)
+    - name: Rodar UUP (baixar + gerar ISO)
       run: |
         cd uup
         cmd /c uup_download_windows.cmd
