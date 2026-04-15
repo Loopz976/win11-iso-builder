@@ -1,4 +1,4 @@
-name: TESTE W10UI FIX
+name: TESTE W10UI FINAL
 
 on:
   workflow_dispatch:
@@ -14,12 +14,15 @@ jobs:
           New-Item -ItemType Directory -Path C:\ISO\sources -Force
           New-Item C:\ISO\sources\install.wim -ItemType File
 
-      - name: Baixar W10UI (FIX REAL)
+      - name: Instalar 7zip
+        run: choco install 7zip -y
+
+      - name: Baixar W10UI (FIX FINAL)
         shell: powershell
         run: |
           curl.exe -L -o w10ui.zip https://codeload.github.com/abbodi1406/WHD/zip/refs/heads/master
 
-          Expand-Archive w10ui.zip -DestinationPath C:\
+          & "C:\Program Files\7-Zip\7z.exe" x w10ui.zip -oC:\ -y
 
           Rename-Item "C:\WHD-master" "C:\w10ui"
 
