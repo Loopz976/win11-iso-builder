@@ -1,4 +1,4 @@
-name: BUILD ISO (W10UI FULL NATIVE)
+name: BUILD ISO LTSC (W10UI + DRIVER NVIDIA)
 
 on:
   workflow_dispatch:
@@ -9,87 +9,114 @@ jobs:
 
     steps:
       # 1. Checkout
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 2. Criar pasta base
+      # 2. Estrutura
       - name: Criar estrutura
         run: |
           mkdir work
           mkdir work\files
+          mkdir work\iso_extract
 
-      # 3. Baixar ISO BASE (partes)
-      - name: Download ISO Base (parts)
+      # 3. Baixar ISO (sua release correta)
+      - name: Baixar ISO LTSC
         run: |
           cd work
-          curl -L -o iso.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10.7z.001
-          curl -L -o iso.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10.7z.002
-          curl -L -o iso.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10.7z.003
+          curl -L -o W10LTSC2021.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
+          curl -L -o W10LTSC2021.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
+          curl -L -o W10LTSC2021.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
-      # 4. Extrair ISO base
+      # 4. Extrair ISO
       - name: Extrair ISO
         run: |
           cd work
-          7z x iso.7z.001 -oiso
+          7z x W10LTSC2021.7z.001 -oiso
 
-      # 5. Mover ISO para pasta FILES (intocável)
-      - name: Mover ISO para files
+      # 5. Mover ISO
+      - name: Mover ISO
         run: |
-          move work\iso\*.iso work\files\
+          move work\iso\*.iso work\files\base.iso
 
-      # 6. Baixar W10UI
+      # 6. Extrair ISO (TARGET correto)
+      - name: Extrair conteúdo ISO
+        run: |
+          7z x work\files\base.iso -owork\iso_extract
+
+      # 7. Baixar W10UI
       - name: Baixar W10UI
         run: |
           cd work
           curl -L -o W10UI.zip https://tiny.cc/W10UI
 
-      # 7. Extrair W10UI dentro da pasta FILES
+      # 8. Extrair W10UI
       - name: Extrair W10UI
         run: |
           7z x work\W10UI.zip -owork\files\
 
-      # 8. Baixar updates
-      - name: Baixar Updates
+      # 9. BAIXAR DRIVER NVIDIA 342.01
+      - name: Baixar driver NVIDIA 342.01
+        run: |
+          cd work
+          curl -L -o nvidia.exe https://us.download.nvidia.com/Windows/342.01/342.01-desktop-win10-64bit-international-whql.exe
+
+      # 10. Extrair driver NVIDIA
+      - name: Extrair driver NVIDIA
+        run: |
+          7z x work\nvidia.exe -owork\nvidia
+
+      # 11. Copiar Display.Driver → W10UI Drivers
+      - name: Integrar driver no W10UI
+        run: |
+          mkdir work\files\Drivers\OS\Video
+          xcopy /E /I work\nvidia\Display.Driver work\files\Drivers\OS\Video
+
+      # 12. Criar pasta updates
+      - name: Criar updates
         run: |
           mkdir work\files\updates
-          cd work\files\updates
 
-          # EXEMPLO (ajuste depois com seus updates reais)
-          curl -L -o update1.cab https://example.com/update1.cab
-          curl -L -o update2.msu https://example.com/update2.msu
+      # (placeholder - depois você coloca updates reais)
+      - name: Placeholder updates
+        run: |
+          echo vazio > work\files\updates\readme.txt
 
-      # 9. Criar W10UI.ini já configurado
-      - name: Criar config W10UI.ini
+      # 13. Configurar W10UI.ini (COM DRIVER)
+      - name: Configurar W10UI.ini
         run: |
           echo [W10UI] > work\files\W10UI.ini
           echo AutoStart=1 >> work\files\W10UI.ini
           echo AddUpdates=1 >> work\files\W10UI.ini
+          echo AddDrivers=1 >> work\files\W10UI.ini
           echo Cleanup=1 >> work\files\W10UI.ini
           echo ResetBase=1 >> work\files\W10UI.ini
           echo NetFx3=1 >> work\files\W10UI.ini
           echo StartVirtual=0 >> work\files\W10UI.ini
           echo wim2esd=1 >> work\files\W10UI.ini
           echo SkipISO=0 >> work\files\W10UI.ini
+          echo Target=..\iso_extract >> work\files\W10UI.ini
 
-      # 10. Executar W10UI (dentro da pasta files)
+      # 14. Executar W10UI
       - name: Rodar W10UI
         run: |
           cd work\files
           dir
           call W10UI.cmd
 
-      # 11. Compactar ISO final em partes 1900MB
-      - name: Compactar ISO Final
+      # 15. Organizar saída
+      - name: Organizar ISO final
         run: |
           mkdir output
           move work\files\*.iso output\
 
+      # 16. Compactar
+      - name: Compactar ISO
+        run: |
           cd output
-          7z a -v1900m final_iso.7z *.iso
+          7z a -v1900m FINAL_LTSC_DRIVER.7z *.iso
 
-      # 12. Upload artifact
-      - name: Upload ISO
+      # 17. Upload
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ISO_FINAL
+          name: ISO_LTSC_DRIVER
           path: output\*.7z
