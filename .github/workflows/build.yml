@@ -1,37 +1,47 @@
-name: Teste WIM FIX
+name: Teste ISO com mkisofs
 
 on:
   workflow_dispatch:
 
 jobs:
-  test:
+  build:
     runs-on: windows-latest
 
     steps:
 
-      - name: Instalar wimlib
-        run: choco install wimlib -y
+      - name: Instalar mkisofs
+        run: choco install cdrtools -y
 
-      - name: Preparar estrutura
+      - name: Preparar estrutura ISO
         shell: powershell
         run: |
           mkdir C:\iso
-          mkdir C:\work
-          echo TESTE > C:\iso\arquivo.txt
+          mkdir C:\iso\boot
 
-      - name: Criar WIM
+          echo TESTE > C:\iso\arquivo.txt
+          echo BOOT > C:\iso\boot\etfsboot.com
+
+      - name: Criar ISO bootável
         shell: powershell
         run: |
-          wimlib-imagex capture C:\iso C:\work\teste.wim --compress=LZX
+          mkisofs `
+            -o C:\work\teste.iso `
+            -b boot/etfsboot.com `
+            -no-emul-boot `
+            -boot-load-size 8 `
+            -iso-level 3 `
+            -udf `
+            -J -R `
+            C:\iso
 
-          if (!(Test-Path "C:\work\teste.wim")) {
-            throw "Falha ao criar WIM"
+          if (!(Test-Path "C:\work\teste.iso")) {
+            throw "ISO não foi criada"
           }
 
-          Write-Host "WIM criado com sucesso!"
+          Write-Host "ISO criada com sucesso!"
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: teste-wim
-          path: C:\work\teste.wim
+          name: teste-iso
+          path: C:\work\teste.iso
