@@ -1,4 +1,4 @@
-name: BUILD ISO LTSC FINAL (FIX DRIVER FINAL)
+name: BUILD ISO LTSC FINAL (AUTO + DEBUG)
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # 1. Estrutura
+      # 1. Base
       - uses: actions/checkout@v4
 
       - name: Criar estrutura
@@ -44,7 +44,7 @@ jobs:
           Remove-Item work\W10LTSC2021.7z.* -Force -ErrorAction SilentlyContinue
           Remove-Item C:\Files\*.iso -Force
 
-      # 3. W10UI PRIMEIRO (IMPORTANTE)
+      # 3. W10UI
       - name: Baixar W10UI
         run: |
           cd work
@@ -58,17 +58,17 @@ jobs:
         run: |
           Remove-Item work\W10UI.zip -Force
 
-      # 4. DRIVER NVIDIA (AGORA CORRETO)
+      # 4. DRIVER
       - name: Baixar driver NVIDIA
         run: |
           cd work
           curl -L -o nvidia.exe https://us.download.nvidia.com/Windows/341.92/341.92-desktop-win10-64bit-international.exe
 
-      - name: Extrair driver com 7zip
+      - name: Extrair driver
         run: |
           7z x work\nvidia.exe -owork\nvidia
 
-      - name: Copiar Display.Driver (SEM CRIAR PASTA)
+      - name: Copiar Display.Driver
         run: |
           xcopy /E /I /Y work\nvidia\Display.Driver C:\Files\Drivers\OS\Display.Driver
 
@@ -77,7 +77,7 @@ jobs:
           Remove-Item work\nvidia -Recurse -Force
           Remove-Item work\nvidia.exe -Force
 
-      # 5. Updates (soltos)
+      # 5. Updates
       - name: Preparar updates
         run: |
           echo coloque_updates_aqui > C:\Files\UPDATE_PLACEHOLDER.txt
@@ -97,11 +97,21 @@ jobs:
           echo SkipISO=0 >> C:\Files\W10UI.ini
           echo Target=C:\Files\ISO >> C:\Files\W10UI.ini
 
-      # 7. EXECUTAR
+      # 🔎 DEBUG ESTRUTURA (IMPORTANTE)
+      - name: Verificar estrutura Files
+        run: |
+          echo ===== LISTAGEM C:\Files =====
+          dir C:\Files
+          echo ===== ISO =====
+          dir C:\Files\ISO
+          echo ===== DRIVERS =====
+          dir C:\Files\Drivers\OS
+
+      # 7. EXECUÇÃO AUTOMÁTICA (FIX FINAL)
       - name: Executar W10UI
         run: |
           cd C:\Files
-          call W10UI.cmd
+          cmd /c W10UI.cmd
 
       # 8. OUTPUT
       - name: Organizar saída
@@ -109,7 +119,7 @@ jobs:
           mkdir output
           move C:\Files\*.iso output\
 
-      - name: Compactar
+      - name: Compactar ISO
         run: |
           cd output
           7z a -v1900m FINAL_LTSC.7z *.iso
