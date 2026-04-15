@@ -17,9 +17,9 @@ jobs:
         echo "ARCHIVE_NAME=W10LTSC2021" >> $env:GITHUB_ENV
         echo "TAG_NAME=w10-ltsc-2021-${{ github.run_id }}" >> $env:GITHUB_ENV
 
-    - name: Baixar ISO (nome original)
+    - name: Baixar ISO (nome original preservado)
       run: |
-        curl -L -o $env:ISO_FILE $env:ISO_URL
+        curl -L --retry 5 --retry-delay 5 -o "$env:ISO_FILE" "$env:ISO_URL"
 
     - name: Verificar download
       run: dir
@@ -35,7 +35,7 @@ jobs:
     - name: Gerar hash SHA256
       shell: powershell
       run: |
-        certutil -hashfile $env:ISO_FILE SHA256 > hash.txt
+        certutil -hashfile "$env:ISO_FILE" SHA256 > hash.txt
 
     - name: Criar Release
       uses: softprops/action-gh-release@v2
