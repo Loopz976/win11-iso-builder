@@ -1,4 +1,4 @@
-name: Teste OSCdimg FIX
+name: Teste ISO com wimlib
 
 on:
   workflow_dispatch:
@@ -9,42 +9,28 @@ jobs:
 
     steps:
 
-      - name: Preparar pastas
+      - name: Instalar wimlib
+        run: choco install wimlib -y
+
+      - name: Preparar estrutura ISO
         shell: powershell
         run: |
-          mkdir C:\work
           mkdir C:\iso
-
-      - name: Criar estrutura fake
-        shell: powershell
-        run: |
-          mkdir C:\iso\boot
           echo TESTE > C:\iso\arquivo.txt
-          echo BOOT > C:\iso\boot\etfsboot.com
 
-      - name: Baixar oscdimg portátil
+      - name: Criar ISO com wimlib
         shell: powershell
         run: |
-          curl.exe -L "https://github.com/abbodi1406/vcredist/raw/master/bin/oscdimg.exe" -o C:\work\oscdimg.exe
+          wimlib-imagex capture C:\iso C:\work\teste.wim --compress=LZX
 
-      - name: Testar criação ISO
-        shell: powershell
-        run: |
-          & "C:\work\oscdimg.exe" `
-            -bC:\iso\boot\etfsboot.com `
-            -u2 -h -m `
-            -lTESTE_ISO `
-            C:\iso `
-            C:\work\teste.iso
-
-          if (!(Test-Path "C:\work\teste.iso")) {
-            throw "ISO não foi criada"
+          if (!(Test-Path "C:\work\teste.wim")) {
+            throw "Falha ao criar imagem"
           }
 
-          Write-Host "ISO criada com sucesso!"
+          Write-Host "WIM criado com sucesso!"
 
-      - name: Upload teste
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: teste-iso
-          path: C:\work\teste.iso
+          name: teste-wim
+          path: C:\work\teste.wim
