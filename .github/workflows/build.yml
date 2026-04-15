@@ -1,4 +1,4 @@
-name: Build Windows 11 23H2 PRO ISO FINAL
+name: Build Win11 23H2 PRO ISO FINAL
 
 on:
   workflow_dispatch:
@@ -8,11 +8,15 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # 📁 Preparar ambiente
+
       - name: Preparar ambiente
+        shell: powershell
         run: |
           mkdir C:\work
           mkdir C:\iso
+
+      - name: Instalar 7zip
+        run: choco install 7zip -y
 
       # 📥 Baixar partes
       - name: Baixar partes
@@ -22,7 +26,7 @@ jobs:
           curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003" -o C:\work\files.zip.003
           curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004" -o C:\work\files.zip.004
 
-      # 📦 Extrair pacote
+      # 📦 Extrair zip multi-part
       - name: Extrair pacote
         shell: powershell
         run: |
@@ -32,16 +36,9 @@ jobs:
       - name: Localizar ISO
         shell: powershell
         run: |
-          $iso = Get-ChildItem -Path C:\work\extract\Files -Recurse -Filter "Win11*.iso" | Select-Object -First 1
-
-          if (-not $iso) {
-            Write-Host "Conteúdo encontrado:"
-            Get-ChildItem -Recurse C:\work\extract
-            throw "ISO não encontrada"
-          }
-
+          $iso = Get-ChildItem -Path C:\work\extract\Files -Recurse -Filter "*.iso" | Select-Object -First 1
+          if (-not $iso) { throw "ISO não encontrada" }
           Copy-Item $iso.FullName C:\work\base.iso
-          Write-Host "ISO encontrada:" $iso.FullName
 
       # 📦 Extrair ISO
       - name: Extrair ISO
@@ -49,8 +46,8 @@ jobs:
         run: |
           & "C:\Program Files\7-Zip\7z.exe" x C:\work\base.iso -oC:\iso -y
 
-      # 🔍 Detectar install.wim ou install.esd
-      - name: Detectar imagem
+      # 🔍 Detectar install
+      - name: Detectar install
         shell: powershell
         run: |
           if (Test-Path "C:\iso\sources\install.wim") {
@@ -58,71 +55,69 @@ jobs:
           } elseif (Test-Path "C:\iso\sources\install.esd") {
             echo "IMG=C:\iso\sources\install.esd" >> $env:GITHUB_ENV
           } else {
-            throw "install.wim/esd não encontrado"
+            throw "install não encontrado"
           }
 
       # 🔄 Exportar PRO (index 4)
       - name: Exportar PRO
-        run: |
-          dism /Export-Image /SourceImageFile:$env:IMG /SourceIndex:4 /DestinationImageFile:C:\iso\sources\install.wim /Compress:max
-
-      # 🧹 Remover ESD antigo
-      - name: Limpar ESD
         shell: powershell
         run: |
-          Remove-Item C:\iso\sources\install.esd -ErrorAction SilentlyContinue
+          dism /Export-Image /SourceImageFile:$env:IMG /SourceIndex:4 /DestinationImageFile:C:\iso\sources\install_pro.wim /Compress:max
+          Remove-Item C:\iso\sources\install.wim -Force -ErrorAction SilentlyContinue
+          Remove-Item C:\iso\sources\install.esd -Force -ErrorAction SilentlyContinue
+          Rename-Item C:\iso\sources\install_pro.wim install.wim
 
-      # 🔧 Instalar ADK + WinPE (GARANTIDO)
-      - name: Instalar ADK + WinPE
+      # 🧹 LIMPEZA CRÍTICA (RESOLVE ERRO DE ESPAÇO)
+      - name: Limpeza pesada
         shell: powershell
         run: |
-          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2196224" -OutFile C:\work\adksetup.exe
-          Start-Process C:\work\adksetup.exe -ArgumentList "/quiet /norestart /features OptionId.DeploymentTools" -Wait
+          Write-Host "Limpando arquivos pesados..."
 
-          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2196127" -OutFile C:\work\adkwinpe.exe
-          Start-Process C:\work\adkwinpe.exe -ArgumentList "/quiet /norestart" -Wait
+          Remove-Item C:\work\*.zip* -Force -ErrorAction SilentlyContinue
+          Remove-Item C:\work\base.iso -Force -ErrorAction SilentlyContinue
+          Remove-Item C:\work\extract -Recurse -Force -ErrorAction SilentlyContinue
 
-      # 🔍 Localizar oscdimg corretamente
-      - name: Encontrar oscdimg
+          Remove-Item C:\Users\runneradmin\AppData\Local\Temp\* -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item C:\Windows\SoftwareDistribution\Download -Recurse -Force -ErrorAction SilentlyContinue
+
+          Write-Host "Espaço liberado!"
+
+      # 🔧 Instalar ADK
+      - name: Instalar ADK
         shell: powershell
         run: |
-          $oscdimg = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe | Select-Object -First 1
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2196224" -OutFile adk.exe
+          Start-Process .\adk.exe -ArgumentList "/quiet /norestart /features OptionId.DeploymentTools" -Wait
 
-          if (-not $oscdimg) {
-            throw "oscdimg.exe NÃO encontrado"
-          }
+      # 🔍 Localizar oscdimg
+      - name: Localizar oscdimg
+        shell: powershell
+        run: |
+          $path = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe | Select-Object -First 1
+          if (-not $path) { throw "oscdimg não encontrado" }
+          echo "OSCDIMG=$($path.FullName)" >> $env:GITHUB_ENV
 
-          echo "OSCDIMG=$($oscdimg.FullName)" >> $env:GITHUB_ENV
-          Write-Host "oscdimg encontrado em:" $oscdimg.FullName
-
-      # 💿 Criar ISO FINAL (OFICIAL)
+      # 💿 Criar ISO FINAL
       - name: Criar ISO FINAL
         shell: powershell
         run: |
           & "$env:OSCDIMG" `
-            -bC:\iso\boot\etfsboot.com `
-            -u2 -h -m `
-            -lWIN11_23H2_PRO_FINAL `
-            C:\iso `
-            C:\work\Win11_23H2_Pro_Final.iso
+          -bootdata:2#p0,e,bC:\iso\boot\etfsboot.com#pEF,e,bC:\iso\efi\microsoft\boot\efisys.bin `
+          -u2 -udfver102 `
+          -lWIN11_23H2_PRO `
+          C:\iso `
+          C:\work\Win11_23H2_Pro_Final.iso
 
       # 📦 Compactar ISO
       - name: Compactar ISO
         shell: powershell
         run: |
-          & "C:\Program Files\7-Zip\7z.exe" a -tzip C:\work\Win11_23H2_Pro_Final.zip C:\work\Win11_23H2_Pro_Final.iso -v1900m
+          & "C:\Program Files\7-Zip\7z.exe" a -tzip C:\work\Win11.iso.zip C:\work\Win11_23H2_Pro_Final.iso -v1900m
 
-      # 📤 Upload Release
+      # 📤 Upload
       - name: Upload Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: win11-23h2-pro-final
-          name: Windows 11 23H2 Pro Final ISO
-          body: |
-            Windows 11 23H2 Pro Final ISO
-
-            - Edition: Professional (Index 4)
-            - Clean base
-            - Official boot ISO (Microsoft ADK)
-            - Split 1900MB
-          files: C:\work\Win11_23H2_Pro_Final.zip.*
+          name: Windows 11 23H2 PRO FINAL
+          files: C:\work\Win11.iso.zip.*
