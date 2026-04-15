@@ -3,6 +3,10 @@ name: W10 LTSC 2021 Release
 on:
   workflow_dispatch:
 
+# 🔥 CORREÇÃO DO ERRO 403
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-2022
