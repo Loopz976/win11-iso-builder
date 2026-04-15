@@ -1,7 +1,117 @@
-    # ================================
-    # 🔥 INTEGRAÇÃO CORRETA (ORDEM)
-    # ================================
+name: LTSC AUTO BUILD (FINAL DEFINITIVO)
 
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+
+    # ================================
+    # 🔹 CACHE ISO
+    # ================================
+    - name: Cache ISO
+      id: cache-iso
+      uses: actions/cache@v4
+      with:
+        path: source.iso
+        key: ltsc-iso-v1
+
+    # ================================
+    # 🔥 DOWNLOAD ISO
+    # ================================
+    - name: Baixar ISO
+      if: steps.cache-iso.outputs.cache-hit != 'true'
+      shell: powershell
+      run: |
+        curl.exe -L -o part.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
+        curl.exe -L -o part.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
+        curl.exe -L -o part.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
+
+    - name: Instalar 7zip
+      run: choco install 7zip -y
+
+    - name: Extrair ISO base
+      if: steps.cache-iso.outputs.cache-hit != 'true'
+      shell: powershell
+      run: |
+        & "C:\Program Files\7-Zip\7z.exe" x part.7z.001 -aoa
+
+    - name: Padronizar ISO
+      if: steps.cache-iso.outputs.cache-hit != 'true'
+      shell: powershell
+      run: |
+        $iso = Get-ChildItem *.iso | Select-Object -First 1
+        Rename-Item $iso.Name source.iso
+
+    # ================================
+    # 🔥 EXTRAIR ISO
+    # ================================
+    - name: Criar work
+      run: mkdir work
+
+    - name: Extrair ISO
+      shell: powershell
+      run: |
+        & "C:\Program Files\7-Zip\7z.exe" x source.iso -owork -aoa
+
+    - name: Remover ISO
+      run: del source.iso
+
+    # 🔹 BACKUP
+    - name: Backup WIM
+      run: copy work\sources\install.wim work\sources\install_original.wim
+
+    # ================================
+    # 🔥 BAIXAR HTML UUP
+    # ================================
+    - name: Baixar página UUP
+      shell: powershell
+      run: |
+        curl.exe -L "https://uupdump.net/get.php?id=1405899d-8302-4010-ad25-3ad906c62200&pack=0&edition=updateOnly" -o uup.html
+
+    # ================================
+    # 🔥 DOWNLOAD + RENAME AUTOMÁTICO
+    # ================================
+    - name: Baixar CABs corretamente
+      shell: powershell
+      run: |
+        mkdir updates
+
+        $html = Get-Content uup.html -Raw
+
+        # links reais
+        $pattern = 'href="(http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/[^"]+)"'
+        $matches = [regex]::Matches($html, $pattern)
+
+        # nomes corretos do script
+        $renamePattern = 'rename "([^"]+)" "([^"]+)"'
+        $renameMatches = [regex]::Matches($html, $renamePattern)
+
+        for ($i = 0; $i -lt $matches.Count; $i++) {
+          $url = $matches[$i].Groups[1].Value
+          $correctName = $renameMatches[$i].Groups[2].Value
+
+          Write-Host "Baixando $correctName"
+          curl.exe -L $url -o "updates\$correctName"
+        }
+
+    # ================================
+    # 🔥 MOUNT
+    # ================================
+    - name: Criar mount
+      run: mkdir mount
+
+    - name: Montar WIM
+      shell: powershell
+      run: |
+        dism /Mount-Wim /WimFile:work\sources\install.wim /index:1 /MountDir:mount
+
+    # ================================
+    # 🔥 INTEGRAÇÃO ORDENADA
+    # ================================
     - name: Integrar SSU
       shell: powershell
       run: |
@@ -25,3 +135,72 @@
           Write-Host "Integrando $($pkg.Name)"
           dism /Image:mount /Add-Package /PackagePath:$pkg.FullName
         }
+
+    # ================================
+    # 🔥 CLEAN
+    # ================================
+    - name: Cleanup
+      shell: powershell
+      run: |
+        dism /Image:mount /Cleanup-Image /StartComponentCleanup /ResetBase
+
+    # ================================
+    # 🔥 UNMOUNT
+    # ================================
+    - name: Commit
+      shell: powershell
+      run: |
+        dism /Unmount-Wim /MountDir:mount /Commit
+
+    # 🔥 LIMPAR UPDATES
+    - name: Limpar updates
+      run: rmdir /s /q updates
+
+    # ================================
+    # 🔥 ESD (MAX)
+    # ================================
+    - name: Converter ESD
+      shell: powershell
+      run: |
+        dism /Export-Image /SourceImageFile:work\sources\install.wim `
+        /SourceIndex:1 `
+        /DestinationImageFile:work\sources\install.esd `
+        /Compress:recovery
+
+        del work\sources\install.wim
+
+    # ================================
+    # 🔥 ISO
+    # ================================
+    - name: Instalar ADK
+      run: choco install windows-adk -y
+
+    - name: Criar ISO
+      shell: powershell
+      run: |
+        $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
+        & $oscdimg -bwork\boot\etfsboot.com -u2 -h -m -o -lLTSC_FINAL work final.iso
+
+    # 🔥 LIMPAR WORK
+    - name: Limpar work
+      run: rmdir /s /q work
+
+    # ================================
+    # 🔥 SPLIT 1900MB
+    # ================================
+    - name: Split ISO
+      shell: powershell
+      run: |
+        & "C:\Program Files\7-Zip\7z.exe" a split.7z final.iso -v1900m
+
+    - name: Remover ISO
+      run: del final.iso
+
+    # ================================
+    # 📦 UPLOAD FINAL
+    # ================================
+    - name: Upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: LTSC-FINAL
+        path: split.7z.*
