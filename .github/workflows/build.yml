@@ -1,4 +1,4 @@
-name: Win11 PRO FULL AUTO CLEAN (W10UI)
+name: Win11 PRO W10UI FULL AUTO CLEAN FINAL
 
 on:
   workflow_dispatch:
@@ -14,205 +14,164 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # -------------------------
       # 7ZIP
-      # -------------------------
       - name: Instalar 7zip
         run: choco install 7zip -y
 
-      # -------------------------
       # PASTAS
-      # -------------------------
       - name: Preparar ambiente
         shell: powershell
         run: |
           mkdir C:\work
           mkdir C:\base
-          mkdir C:\iso
+          mkdir C:\ISO
           mkdir C:\out
-          mkdir C:\drivers
+          mkdir C:\drv
 
-      # -------------------------
-      # ISO BASE
-      # -------------------------
-      - name: Baixar ISO base
+      # BAIXAR BASE
+      - name: Baixar partes
         shell: powershell
         run: |
-          curl.exe -L -o C:\work\1.zip.001 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.001
-          curl.exe -L -o C:\work\1.zip.002 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.002
-          curl.exe -L -o C:\work\1.zip.003 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003
-          curl.exe -L -o C:\work\1.zip.004 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004
+          curl.exe -L -o C:\work\base.zip.001 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.001
+          curl.exe -L -o C:\work\base.zip.002 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.002
+          curl.exe -L -o C:\work\base.zip.003 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003
+          curl.exe -L -o C:\work\base.zip.004 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004
 
+      # EXTRAIR BASE
       - name: Extrair base
         shell: powershell
         run: |
-          & "C:\Program Files\7-Zip\7z.exe" x C:\work\1.zip.001 -oC:\base -y
+          & "C:\Program Files\7-Zip\7z.exe" x C:\work\base.zip.001 -oC:\base -y
 
-      - name: Localizar paths
+      # LOCALIZAR FILES + ISO
+      - name: Localizar base
         id: path
         shell: powershell
         run: |
           $files = Get-ChildItem C:\base -Recurse -Directory | Where {$_.Name -eq "Files"} | Select -First 1
           $iso = Get-ChildItem $files.FullName -Filter *.iso -Recurse | Select -First 1
-
-          if (!$files -or !$iso) { throw "Arquivos não encontrados" }
-
+          if (!$files -or !$iso) { throw "Base inválida" }
           "files=$($files.FullName)" >> $env:GITHUB_OUTPUT
           "iso=$($iso.FullName)" >> $env:GITHUB_OUTPUT
 
+      # EXTRAIR ISO
       - name: Extrair ISO
         shell: powershell
         run: |
-          & "C:\Program Files\7-Zip\7z.exe" x "${{ steps.path.outputs.iso }}" -oC:\iso -y
+          & "C:\Program Files\7-Zip\7z.exe" x "${{ steps.path.outputs.iso }}" -oC:\ISO -y
 
-      # -------------------------
       # LIMPEZA INICIAL
-      # -------------------------
       - name: Limpeza inicial
         shell: powershell
         run: |
           Remove-Item C:\work -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item C:\base\*.zip* -Force -ErrorAction SilentlyContinue
-          Remove-Item C:\Users\runneradmin\AppData\Local\Temp\* -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item $env:TEMP\* -Recurse -Force -ErrorAction SilentlyContinue
 
-      # -------------------------
-      # DRIVER NVIDIA
-      # -------------------------
-      - name: Baixar driver NVIDIA
+      # SOMENTE PRO
+      - name: Forçar PRO
         shell: powershell
         run: |
-          curl.exe -L -o C:\drivers\nvidia.exe https://us.download.nvidia.com/Windows/342.01/342.01-desktop-win10-64bit-international.exe
+          dism /Export-Image `
+          /SourceImageFile:C:\ISO\sources\install.wim `
+          /SourceIndex:4 `
+          /DestinationImageFile:C:\ISO\sources\install_pro.wim `
+          /Compress:max
 
-      - name: Extrair driver
+          Remove-Item C:\ISO\sources\install.wim
+          Rename-Item C:\ISO\sources\install_pro.wim install.wim
+
+      # DRIVER
+      - name: Driver NVIDIA
         shell: powershell
         run: |
-          & "C:\Program Files\7-Zip\7z.exe" x C:\drivers\nvidia.exe -oC:\drivers\nv -y
-
-      - name: Copiar driver
-        shell: powershell
-        run: |
+          curl.exe -L -o C:\drv\nv.exe https://us.download.nvidia.com/Windows/342.01/342.01-desktop-win10-64bit-international.exe
+          & "C:\Program Files\7-Zip\7z.exe" x C:\drv\nv.exe -oC:\drv\nv -y
           mkdir "${{ steps.path.outputs.files }}\Drivers" -Force
-          Copy-Item C:\drivers\nv\Display.Driver\* "${{ steps.path.outputs.files }}\Drivers" -Recurse -Force
+          Copy-Item C:\drv\nv\Display.Driver\*.inf "${{ steps.path.outputs.files }}\Drivers" -Recurse -Force
+          Remove-Item C:\drv -Recurse -Force
 
-      - name: Limpeza driver
+      # UUP
+      - name: Baixar UUP
         shell: powershell
         run: |
-          Remove-Item C:\drivers\nvidia.exe -Force -ErrorAction SilentlyContinue
-          Remove-Item C:\drivers\nv -Recurse -Force -ErrorAction SilentlyContinue
-
-      # -------------------------
-      # UPDATES (UUP)
-      # -------------------------
-      - name: Baixar UUP script
-        shell: powershell
-        run: |
-          curl.exe -L -o C:\base\uup.zip https://github.com/uup-dump/uup-dump/releases/latest/download/uup_download_windows.cmd.zip
+          Invoke-WebRequest -Uri "https://github.com/uup-dump/uup-dump/releases/latest/download/uup_download_windows.cmd.zip" -OutFile "C:\base\uup.zip"
 
       - name: Extrair UUP
         shell: powershell
         run: |
-          Expand-Archive C:\base\uup.zip -DestinationPath C:\base\uup
+          & "C:\Program Files\7-Zip\7z.exe" x C:\base\uup.zip -oC:\base\uup -y
 
       - name: Rodar UUP
         shell: cmd
         working-directory: C:\base\uup
-        run: |
-          call uup_download_windows.cmd
+        run: call uup_download_windows.cmd
 
       - name: Copiar updates
         shell: powershell
         run: |
           Copy-Item C:\base\uup\UUPs\* "${{ steps.path.outputs.files }}" -Recurse -Force
 
+      # LIMPEZA UUP (CRÍTICO)
       - name: Limpeza UUP
         shell: powershell
         run: |
-          Remove-Item C:\base\uup -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item C:\base\uup -Recurse -Force
+          Remove-Item C:\base\uup.zip -Force
 
-      # -------------------------
-      # FORÇAR PRO
-      # -------------------------
-      - name: Somente PRO
-        shell: powershell
-        run: |
-          dism /Export-Image `
-          /SourceImageFile:C:\iso\sources\install.wim `
-          /SourceIndex:4 `
-          /DestinationImageFile:C:\iso\sources\install_new.wim `
-          /Compress:max
-
-          Remove-Item C:\iso\sources\install.wim
-          Rename-Item C:\iso\sources\install_new.wim install.wim
-
-      # -------------------------
       # CONFIG W10UI
-      # -------------------------
       - name: Configurar W10UI
         shell: powershell
         run: |
           $ini = Join-Path "${{ steps.path.outputs.files }}" "W10UI.ini"
-
           (Get-Content $ini) `
-          -replace 'Target\s*=.*',"Target=C:\iso" `
+          -replace 'Target\s*=.*',"Target=C:\ISO" `
           -replace 'AutoStart\s*=.*',"AutoStart=1" `
           -replace 'ISO\s*=.*',"ISO=1" `
           -replace 'Cleanup\s*=.*',"Cleanup=1" `
+          -replace 'ResetBase\s*=.*',"ResetBase=1" `
+          -replace 'wim2esd\s*=.*',"wim2esd=1" `
           | Set-Content $ini
 
-      # -------------------------
       # LIMPEZA DISM
-      # -------------------------
       - name: Limpeza DISM
         shell: powershell
-        run: |
-          dism /Cleanup-Wim
+        run: dism /Cleanup-Wim
 
-      # -------------------------
       # W10UI
-      # -------------------------
       - name: Rodar W10UI
         shell: cmd
         working-directory: ${{ steps.path.outputs.files }}
-        run: |
-          call W10UI.cmd
+        run: call W10UI.cmd
 
-      # -------------------------
       # PEGAR ISO FINAL
-      # -------------------------
-      - name: Encontrar ISO final
+      - name: ISO final
         id: final
         shell: powershell
         run: |
           $iso = Get-ChildItem C:\ -Recurse -Filter *.iso | Sort LastWriteTime -Descending | Select -First 1
-          if (!$iso) { throw "ISO final não encontrada" }
-
+          if (!$iso) { throw "ISO não encontrada" }
           "iso=$($iso.FullName)" >> $env:GITHUB_OUTPUT
 
-      # -------------------------
       # COMPACTAR
-      # -------------------------
-      - name: Compactar ISO
+      - name: Compactar
         shell: powershell
         run: |
           & "C:\Program Files\7-Zip\7z.exe" a -tzip -v1900m C:\out\ISO.zip "${{ steps.final.outputs.iso }}"
 
-      # -------------------------
       # LIMPEZA FINAL
-      # -------------------------
-      - name: Limpeza final
+      - name: Limpeza final total
         shell: powershell
         run: |
-          Remove-Item C:\iso -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item C:\ISO -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item C:\base -Recurse -Force -ErrorAction SilentlyContinue
-          Remove-Item C:\drivers -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item $env:TEMP\* -Recurse -Force -ErrorAction SilentlyContinue
 
-      # -------------------------
       # RELEASE
-      # -------------------------
       - name: Upload Release
         uses: ncipollo/release-action@v1
         with:
-          tag: win11-full-${{ github.run_id }}
-          name: Win11 PRO FULL AUTO CLEAN
+          tag: win11-final-${{ github.run_id }}
+          name: Win11 PRO W10UI FINAL CLEAN
           artifacts: C:\out\ISO.zip*
           token: ${{ github.token }}
