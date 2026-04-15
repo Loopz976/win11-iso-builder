@@ -1,4 +1,4 @@
-name: Build Windows 11 23H2 PRO ISO (Final Split)
+name: Build Windows 11 23H2 PRO ISO (Final)
 
 on:
   workflow_dispatch:
@@ -12,10 +12,9 @@ jobs:
       - name: Preparar ambiente
         run: |
           mkdir C:\work
-          mkdir C:\mount
           mkdir C:\iso
 
-      # 📥 Baixar partes
+      # 📥 Baixar todas partes
       - name: Baixar partes
         run: |
           curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.001" -o C:\work\files.zip.001
@@ -23,28 +22,42 @@ jobs:
           curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003" -o C:\work\files.zip.003
           curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004" -o C:\work\files.zip.004
 
-      # 📦 Extrair com 7zip
+      # 📦 Extrair tudo com 7zip (auto junta)
       - name: Extrair com 7zip
+        shell: powershell
         run: |
           & "C:\Program Files\7-Zip\7z.exe" x C:\work\files.zip.001 -oC:\work\extract -y
 
-      # 🔍 Localizar ISO
-      - name: Localizar ISO
+      # 🔍 Procurar ISO dentro da pasta Files
+      - name: Localizar ISO correta
         shell: powershell
         run: |
-          $iso = Get-ChildItem -Path C:\work\extract -Recurse -Filter *.iso | Select-Object -First 1
-          if (-not $iso) { throw "ISO não encontrada" }
+          $iso = Get-ChildItem -Path C:\work\extract\Files -Recurse -Filter "Win11*.iso" | Select-Object -First 1
+
+          if (-not $iso) {
+            Write-Host "Conteúdo encontrado:"
+            Get-ChildItem -Path C:\work\extract -Recurse
+            throw "ISO não encontrada na pasta Files"
+          }
+
+          Write-Host "ISO encontrada:" $iso.FullName
           Copy-Item $iso.FullName C:\work\base.iso
 
       # 💿 Montar ISO
       - name: Montar ISO
-        run: Mount-DiskImage -ImagePath C:\work\base.iso
+        shell: powershell
+        run: |
+          $mount = Mount-DiskImage -ImagePath C:\work\base.iso -PassThru
+          $drive = ($mount | Get-Volume).DriveLetter + ":"
+          echo "DRIVE=$drive" >> $env:GITHUB_ENV
 
-      # 📂 Copiar conteúdo
-      - name: Copiar conteúdo ISO
-        run: robocopy D:\ C:\iso /E
+      # 📂 Copiar conteúdo ISO
+      - name: Copiar conteúdo
+        shell: powershell
+        run: |
+          robocopy $env:DRIVE C:\iso /E
 
-      # 🔄 Exportar apenas PRO (index 4)
+      # 🔄 Manter somente PRO (index 4)
       - name: Manter PRO
         run: |
           dism /Export-Image /SourceImageFile:C:\iso\sources\install.wim /SourceIndex:4 /DestinationImageFile:C:\iso\sources\install2.wim /Compress:max
@@ -67,24 +80,21 @@ jobs:
           & $oscdimg -bC:\iso\boot\etfsboot.com -u2 -h -m -lWIN11_23H2_PRO_FINAL C:\iso C:\work\Win11_23H2_Pro_Final.iso
 
       # 📦 Compactar em partes 1900MB
-      - name: Compactar ISO (split)
+      - name: Compactar ISO
+        shell: powershell
         run: |
-          "C:\Program Files\7-Zip\7z.exe" a -tzip C:\work\Win11_23H2_Pro_Final.zip C:\work\Win11_23H2_Pro_Final.iso -v1900m
+          & "C:\Program Files\7-Zip\7z.exe" a -tzip C:\work\Win11_23H2_Pro_Final.zip C:\work\Win11_23H2_Pro_Final.iso -v1900m
 
-      # 📤 Upload partes
+      # 📤 Upload
       - name: Upload Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: win11-23h2-pro-final
-          name: Windows 11 23H2 Pro Final ISO (Split)
+          name: Windows 11 23H2 Pro Final ISO
           body: |
             Windows 11 23H2 Pro Final ISO
 
             - Edition: Professional (Index 4)
-            - Fully clean base
-            - Split in 1900MB parts
-            - Ready for customization
-
-            Extract with 7-Zip (start from .zip.001)
-          files: |
-            C:\work\Win11_23H2_Pro_Final.zip.*
+            - Source: Original untouched ISO
+            - Split 1900MB
+          files: C:\work\Win11_23H2_Pro_Final.zip.*
