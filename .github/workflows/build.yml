@@ -1,75 +1,13 @@
-name: Build Windows 11 23H2 PRO BASE ISO
+- name: Baixar ESD (OneDrive fix)
+  shell: powershell
+  run: |
+    $url = "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvYy81NzkwODAxMDBjZDcxYzQxL0lRQmVORlBhSC10c1I3VjgzaENxcGoyeEFWelM4WEQyMmE4SUJ1V0YyVk5ienNZ/content"
+    $output = "C:\work\install.esd"
 
-on:
-  workflow_dispatch:
+    Invoke-WebRequest -Uri $url -OutFile $output
 
-jobs:
-  build:
-    runs-on: windows-latest
+    if (!(Test-Path $output)) {
+      throw "Download falhou"
+    }
 
-    steps:
-      - name: Preparar ambiente
-        run: |
-          mkdir C:\work
-          mkdir C:\work\iso\sources
-
-      # 📥 Download ESD do OneDrive
-      - name: Baixar ESD (OneDrive)
-        run: |
-          Invoke-WebRequest -Uri "https://onedrive.live.com/download?resid=579080100cd71c41!579080100cd71c41&authkey=!AUTH" -OutFile C:\work\install.esd
-
-      # 🔍 Detectar índice PRO
-      - name: Detectar index PRO
-        shell: powershell
-        run: |
-          $info = dism /Get-WimInfo /WimFile:C:\work\install.esd
-          $pro = ($info | Select-String "Professional" | Select-Object -First 1)
-
-          if (-not $pro) {
-            throw "PRO não encontrado"
-          }
-
-          $index = ($pro -split ":")[0] -replace "[^0-9]"
-          echo "INDEX=$index" >> $env:GITHUB_ENV
-
-      # 🔄 Converter ESD → WIM com wimlib
-      - name: Baixar wimlib
-        run: |
-          Invoke-WebRequest -Uri "https://wimlib.net/downloads/wimlib-1.13.6-windows-x86_64-bin.zip" -OutFile C:\work\wimlib.zip
-          Expand-Archive C:\work\wimlib.zip -DestinationPath C:\work\wimlib
-
-      - name: Converter com wimlib
-        run: |
-          C:\work\wimlib\wimlib-1.13.6-windows-x86_64-bin\wimlib-imagex.exe export C:\work\install.esd $env:INDEX C:\work\iso\sources\install.wim --compress=LZX
-
-      # 🔧 Instalar ADK
-      - name: Instalar ADK
-        run: |
-          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2196224" -OutFile C:\work\adk.exe
-          Start-Process C:\work\adk.exe -ArgumentList "/quiet /norestart /features OptionId.DeploymentTools" -Wait
-
-      # 💿 Criar ISO
-      - name: Criar ISO BASE
-        run: |
-          $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
-          & $oscdimg -u2 -h -m -lWIN11_23H2_PRO_BASE C:\work\iso C:\work\Win11_23H2_Pro_ptBR_x64_22631.2861_Base.iso
-
-      # 📤 Upload Release
-      - name: Upload Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: win11-23h2-pro-22631-base
-          name: Windows 11 23H2 Pro Base ISO (22631.2861)
-          body: |
-            Windows 11 23H2 Pro Base ISO
-
-            - Version: 23H2
-            - Build: 22631.2861
-            - Edition: Professional
-            - Language: pt-BR
-            - Architecture: x64
-
-            Source: Official Microsoft ESD
-
-            Clean base image for customization pipeline.
-          files: C:\work\Win11_23H2_Pro_ptBR_x64_22631.2861_Base.iso
+    Write-Output "Download concluído"
