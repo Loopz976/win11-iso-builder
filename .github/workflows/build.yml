@@ -1,4 +1,4 @@
-name: Build Windows 11 23H2 PRO ISO (Final)
+name: Build Windows 11 23H2 PRO ISO FINAL
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ jobs:
           mkdir C:\work
           mkdir C:\iso
 
-      # 📥 Baixar todas partes
+      # 📥 Baixar partes
       - name: Baixar partes
         run: |
           curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.001" -o C:\work\files.zip.001
@@ -22,14 +22,14 @@ jobs:
           curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003" -o C:\work\files.zip.003
           curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004" -o C:\work\files.zip.004
 
-      # 📦 Extrair tudo com 7zip (auto junta)
+      # 📦 Extrair com 7zip (usa todas partes)
       - name: Extrair com 7zip
         shell: powershell
         run: |
           & "C:\Program Files\7-Zip\7z.exe" x C:\work\files.zip.001 -oC:\work\extract -y
 
-      # 🔍 Procurar ISO dentro da pasta Files
-      - name: Localizar ISO correta
+      # 🔍 Localizar ISO dentro da pasta Files
+      - name: Localizar ISO
         shell: powershell
         run: |
           $iso = Get-ChildItem -Path C:\work\extract\Files -Recurse -Filter "Win11*.iso" | Select-Object -First 1
@@ -37,11 +37,11 @@ jobs:
           if (-not $iso) {
             Write-Host "Conteúdo encontrado:"
             Get-ChildItem -Path C:\work\extract -Recurse
-            throw "ISO não encontrada na pasta Files"
+            throw "ISO não encontrada"
           }
 
-          Write-Host "ISO encontrada:" $iso.FullName
           Copy-Item $iso.FullName C:\work\base.iso
+          Write-Host "ISO encontrada:" $iso.FullName
 
       # 💿 Montar ISO
       - name: Montar ISO
@@ -57,15 +57,30 @@ jobs:
         run: |
           robocopy $env:DRIVE C:\iso /E
 
-      # 🔄 Manter somente PRO (index 4)
-      - name: Manter PRO
+      # 🔍 Detectar install.wim ou install.esd
+      - name: Detectar imagem
+        shell: powershell
         run: |
-          dism /Export-Image /SourceImageFile:C:\iso\sources\install.wim /SourceIndex:4 /DestinationImageFile:C:\iso\sources\install2.wim /Compress:max
+          if (Test-Path "C:\iso\sources\install.wim") {
+            echo "IMG=C:\iso\sources\install.wim" >> $env:GITHUB_ENV
+          } elseif (Test-Path "C:\iso\sources\install.esd") {
+            echo "IMG=C:\iso\sources\install.esd" >> $env:GITHUB_ENV
+          } else {
+            throw "Nenhum install.wim ou install.esd encontrado"
+          }
 
-      - name: Substituir WIM
+      # 🔄 Exportar apenas PRO (index 4)
+      - name: Exportar PRO
         run: |
-          del C:\iso\sources\install.wim
-          ren C:\iso\sources\install2.wim install.wim
+          dism /Export-Image /SourceImageFile:$env:IMG /SourceIndex:4 /DestinationImageFile:C:\iso\sources\install_new.wim /Compress:max
+
+      # 🔁 Substituir imagem
+      - name: Substituir imagem
+        shell: powershell
+        run: |
+          if (Test-Path "C:\iso\sources\install.wim") { Remove-Item C:\iso\sources\install.wim }
+          if (Test-Path "C:\iso\sources\install.esd") { Remove-Item C:\iso\sources\install.esd }
+          Rename-Item C:\iso\sources\install_new.wim install.wim
 
       # 🔧 Instalar ADK
       - name: Instalar ADK
@@ -85,8 +100,8 @@ jobs:
         run: |
           & "C:\Program Files\7-Zip\7z.exe" a -tzip C:\work\Win11_23H2_Pro_Final.zip C:\work\Win11_23H2_Pro_Final.iso -v1900m
 
-      # 📤 Upload
-      - name: Upload Release
+      # 📤 Upload Release
+      - name: Upload
         uses: softprops/action-gh-release@v1
         with:
           tag_name: win11-23h2-pro-final
@@ -95,6 +110,6 @@ jobs:
             Windows 11 23H2 Pro Final ISO
 
             - Edition: Professional (Index 4)
-            - Source: Original untouched ISO
+            - Clean base
             - Split 1900MB
           files: C:\work\Win11_23H2_Pro_Final.zip.*
