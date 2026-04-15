@@ -1,4 +1,4 @@
-name: Build Windows 11 23H2 ISO (ESD Oficial)
+name: Build Windows 11 23H2 PRO BASE ISO
 
 on:
   workflow_dispatch:
@@ -8,50 +8,46 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v3
-
       # 📁 Preparar ambiente
       - name: Preparar ambiente
         run: |
           mkdir C:\work
+          mkdir C:\work\iso\sources
 
-      # 📥 Baixar ESD oficial
-      - name: Baixar ESD
+      # 📥 Baixar ESD PRO oficial
+      - name: Baixar ESD PRO
         run: |
-          Invoke-WebRequest -Uri "http://dl.delivery.mp.microsoft.com/filestreamingservice/files/ace9af3d-e652-4ff0-ab99-801b3ff36711/22631.2861.231204-0538.23H2_NI_RELEASE_SVC_REFRESH_CLIENTBUSINESS_VOL_x64FRE_pt-br.esd" -OutFile C:\work\install.esd
+          Invoke-WebRequest -Uri "http://dl.delivery.mp.microsoft.com/filestreamingservice/files/1ae4a20e-24d5-43f0-bcdd-b7d7e6b72864/22631.2861.231204-0538.23H2_NI_RELEASE_SVC_REFRESH_CLIENTCONSUMER_RET_x64FRE_pt-br.esd" -OutFile C:\work\install.esd
 
-      # 📥 Baixar ferramenta wimlib
-      - name: Baixar wimlib
+      # 🔍 Detectar index PRO automaticamente
+      - name: Detectar index PRO
+        shell: powershell
         run: |
-          Invoke-WebRequest -Uri "https://wimlib.net/downloads/wimlib-1.13.6-windows-x86_64-bin.zip" -OutFile C:\work\wimlib.zip
-          Expand-Archive C:\work\wimlib.zip -DestinationPath C:\work\wimlib
+          $info = dism /Get-WimInfo /WimFile:C:\work\install.esd
+          $pro = ($info | Select-String "Professional" | Select-Object -First 1)
+          $index = ($pro -split ":")[0] -replace "[^0-9]"
+          echo "INDEX=$index" >> $env:GITHUB_ENV
 
-      # 🔄 Converter ESD → ISO
-      - name: Converter ESD para ISO
+      # 🔄 Converter ESD → WIM
+      - name: Converter ESD para WIM
         run: |
-          cd C:\work
+          dism /Export-Image /SourceImageFile:C:\work\install.esd /SourceIndex:$env:INDEX /DestinationImageFile:C:\work\iso\sources\install.wim /Compress:max
 
-          # Extrair ESD para WIM
-          .\wimlib\wimlib-imagex.exe export install.esd 1 install.wim --compress=LZX
-
-          # Criar estrutura ISO
-          mkdir iso\sources
-          move install.wim iso\sources\install.wim
-
-      # 🔧 Instalar ADK (oscdimg)
+      # 🔧 Instalar ADK
       - name: Instalar ADK
         run: |
-          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2196224" -OutFile adksetup.exe
-          Start-Process adksetup.exe -ArgumentList "/quiet /norestart /features OptionId.DeploymentTools" -Wait
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2196224" -OutFile C:\work\adk.exe
+          Start-Process C:\work\adk.exe -ArgumentList "/quiet /norestart /features OptionId.DeploymentTools" -Wait
 
-      # 💿 Criar ISO final
-      - name: Criar ISO
+      # 💿 Criar ISO base
+      - name: Criar ISO BASE
         run: |
           $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
-          & $oscdimg -u2 -h -m -lWIN11_23H2 C:\work\iso C:\work\final.iso
+          & $oscdimg -u2 -h -m -lWIN11_23H2_PRO_BASE C:\work\iso C:\work\win11_pro_base.iso
 
-      # 📤 Upload
+      # 📤 Upload no Releases
       - name: Upload Release
         uses: softprops/action-gh-release@v1
         with:
-          files: C:\work\final.iso
+          tag_name: base-23h2-pro
+          files: C:\work\win11_pro_base.iso
