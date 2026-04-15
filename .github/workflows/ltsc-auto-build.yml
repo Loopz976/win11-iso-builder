@@ -1,217 +1,173 @@
-name: LTSC AUTO BUILD (FINAL W10UI)
+name: Build Win10 LTSC (FINAL BASE FIXED)
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
-    runs-on: windows-2022
+    runs-on: windows-latest
+    timeout-minutes: 360
 
     steps:
+      - uses: actions/checkout@v4
 
-    # ================================
-    # 🔹 CACHE ISO
-    # ================================
-    - name: Cache ISO
-      id: cache-iso
-      uses: actions/cache@v4
-      with:
-        path: source.iso
-        key: ltsc-iso-v1
+      - name: Instalar 7-Zip
+        run: choco install 7zip -y
 
-    # ================================
-    # 🔥 DOWNLOAD ISO
-    # ================================
-    - name: Baixar ISO
-      if: steps.cache-iso.outputs.cache-hit != 'true'
-      shell: powershell
-      run: |
-        curl.exe -L -o part.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
-        curl.exe -L -o part.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
-        curl.exe -L -o part.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
+      # ================================
+      # 🔥 DOWNLOAD ISO BASE CORRETA
+      # ================================
+      - name: Baixar ISO base (release correto)
+        shell: powershell
+        run: |
+          curl.exe -L -o base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
+          curl.exe -L -o base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
+          curl.exe -L -o base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
-    - name: Instalar 7zip
-      run: choco install 7zip -y
+      # ================================
+      # 🔥 EXTRAIR ISO BASE
+      # ================================
+      - name: Extrair ISO base
+        shell: powershell
+        run: |
+          mkdir D:\BASE
+          & "C:\Program Files\7-Zip\7z.exe" x base.7z.001 -oD:\BASE -y
 
-    - name: Extrair ISO base
-      if: steps.cache-iso.outputs.cache-hit != 'true'
-      shell: powershell
-      run: |
-        & "C:\Program Files\7-Zip\7z.exe" x part.7z.001 -aoa
+      - name: Encontrar ISO
+        id: iso
+        shell: powershell
+        run: |
+          $iso = Get-ChildItem D:\BASE -Recurse *.iso | Select-Object -First 1
+          echo file=$($iso.FullName)>>$env:GITHUB_OUTPUT
 
-    - name: Padronizar ISO
-      if: steps.cache-iso.outputs.cache-hit != 'true'
-      shell: powershell
-      run: |
-        $iso = Get-ChildItem *.iso | Select-Object -First 1
-        Rename-Item $iso.Name source.iso
+      # ================================
+      # 🔥 EXTRAIR ISO
+      # ================================
+      - name: Extrair ISO
+        shell: powershell
+        run: |
+          mkdir D:\ISO
+          & "C:\Program Files\7-Zip\7z.exe" x "${{ steps.iso.outputs.file }}" -oD:\ISO -y
 
-    # ================================
-    # 🔥 EXTRAIR ISO
-    # ================================
-    - name: Criar work
-      run: mkdir work
+      # ================================
+      # 🔥 GARANTIR WIM
+      # ================================
+      - name: Garantir install.wim
+        shell: powershell
+        run: |
+          if (!(Test-Path "D:\ISO\sources\install.wim")) {
+            dism /Export-Image /SourceImageFile:D:\ISO\sources\install.esd /All /DestinationImageFile:D:\ISO\sources\install.wim
+          }
 
-    - name: Extrair ISO
-      shell: powershell
-      run: |
-        & "C:\Program Files\7-Zip\7z.exe" x source.iso -owork -aoa
+      # ================================
+      # 🔥 PREPARAR W10UI
+      # ================================
+      - name: Baixar W10UI
+        run: |
+          git clone https://github.com/abbodi1406/WHD-Windows-Update.git D:\W10UI
 
-    - name: Remover ISO
-      run: del source.iso
+      - name: Criar pastas
+        run: |
+          mkdir D:\W10UI_TEMP
+          mkdir D:\MOUNT
 
-    # ================================
-    # 🔥 BAIXAR HTML UUP
-    # ================================
-    - name: Baixar página UUP
-      shell: powershell
-      run: |
-        curl.exe -L "https://uupdump.net/get.php?id=1405899d-8302-4010-ad25-3ad906c62200&pack=0&edition=updateOnly" -o uup.html
+      # ================================
+      # 🔥 BAIXAR UPDATES AUTOMÁTICO
+      # ================================
+      - name: Baixar updates UUP
+        shell: powershell
+        run: |
+          curl.exe -L "https://uupdump.net/get.php?id=1405899d-8302-4010-ad25-3ad906c62200&pack=0&edition=updateOnly" -o uup.html
 
-    # ================================
-    # 🔥 DOWNLOAD + RENAME CABs
-    # ================================
-    - name: Baixar CABs corretamente
-      shell: powershell
-      run: |
-        mkdir updates
-        $html = Get-Content uup.html -Raw
+          $html = Get-Content uup.html -Raw
+          $links = [regex]::Matches($html,'href="(http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/[^"]+)"')
+          $names = [regex]::Matches($html,'rename "([^"]+)" "([^"]+)"')
 
-        $links = [regex]::Matches($html, 'href="(http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/[^"]+)"')
-        $names = [regex]::Matches($html, 'rename "([^"]+)" "([^"]+)"')
+          for($i=0;$i -lt $links.Count;$i++){
+            $url = $links[$i].Groups[1].Value
+            $name = $names[$i].Groups[2].Value
 
-        for ($i = 0; $i -lt $links.Count; $i++) {
-          $url = $links[$i].Groups[1].Value
-          $name = $names[$i].Groups[2].Value
-          curl.exe -L $url -o "updates\$name"
-        }
+            Write-Host "Baixando $name"
+            curl.exe -L --retry 5 --retry-delay 5 -o "D:\W10UI_TEMP\$name" $url
+          }
 
-    # ================================
-    # 🔥 BAIXAR W10UI
-    # ================================
-    - name: Baixar W10UI
-      run: |
-        git clone https://github.com/abbodi1406/WHD-Windows-Update.git W10UI
-
-    # ================================
-    # 🔥 PREPARAR UPDATES
-    # ================================
-    - name: Preparar updates
-      shell: powershell
-      run: |
-        mkdir W10UI\Updates
-        Copy-Item updates\*.cab W10UI\Updates\
-
-    # ================================
-    # 🔥 CONFIGURAR W10UI.ini
-    # ================================
-    - name: Configurar W10UI
-      shell: powershell
-      run: |
-        Set-Content W10UI\W10UI.ini @"
+      # ================================
+      # 🔥 CONFIGURAR W10UI.ini
+      # ================================
+      - name: Configurar INI
+        shell: powershell
+        run: |
+          Set-Content "D:\W10UI\W10UI.ini" @"
+_CabDir=D:\W10UI_TEMP
+_Target=D:\ISO\sources\install.wim
+_MountDir=D:\MOUNT
 AutoStart=1
 Cleanup=1
 ResetBase=1
-NetFx3=0
 LCUwinre=1
-WinRE=1
 "@
 
-    # ================================
-    # 🔥 RODAR W10UI
-    # ================================
-    - name: Integrar updates (W10UI)
-      shell: powershell
-      run: |
-        cd W10UI
-        cmd /c W10UI.cmd "..\work\sources\install.wim"
+      # ================================
+      # 🔥 RODAR W10UI
+      # ================================
+      - name: Integrar updates (W10UI)
+        shell: cmd
+        run: |
+          cd D:\W10UI
+          call W10UI.cmd
 
-    # ================================
-    # 🔥 VALIDAR BUILD
-    # ================================
-    - name: Validar versão
-      id: version
-      shell: powershell
-      run: |
-        mkdir verify
-        dism /Mount-Wim /WimFile:work\sources\install.wim /index:1 /MountDir:verify
+      # ================================
+      # 🔥 VALIDAR BUILD
+      # ================================
+      - name: Validar versão
+        shell: powershell
+        run: |
+          mkdir D:\VERIFY
+          dism /Mount-Wim /WimFile:D:\ISO\sources\install.wim /index:1 /MountDir:D:\VERIFY
 
-        reg load HKLM\OFFSOFT verify\Windows\System32\Config\SOFTWARE
+          reg load HKLM\OFF D:\VERIFY\Windows\System32\Config\SOFTWARE
 
-        $build = (Get-ItemProperty "HKLM:\OFFSOFT\Microsoft\Windows NT\CurrentVersion").CurrentBuild
-        $ubr = (Get-ItemProperty "HKLM:\OFFSOFT\Microsoft\Windows NT\CurrentVersion").UBR
+          $build=(gp "HKLM:\OFF\Microsoft\Windows NT\CurrentVersion").CurrentBuild
+          $ubr=(gp "HKLM:\OFF\Microsoft\Windows NT\CurrentVersion").UBR
 
-        $full = "$build.$ubr"
-        Write-Host "VERSÃO FINAL: $full"
+          $ver="$build.$ubr"
+          Write-Host "VERSÃO FINAL: $ver"
 
-        echo "version=$full" >> $env:GITHUB_OUTPUT
+          if ($ubr -lt 7184) {
+            Write-Error "Update NÃO aplicado corretamente!"
+            exit 1
+          }
 
-        if ($ubr -lt 7184) {
-          Write-Error "Update não aplicado corretamente!"
-          exit 1
-        }
+          reg unload HKLM\OFF
+          dism /Unmount-Wim /MountDir:D:\VERIFY /Discard
 
-        reg unload HKLM\OFFSOFT
-        dism /Unmount-Wim /MountDir:verify /Discard
+      # ================================
+      # 🔥 PEGAR ISO GERADA
+      # ================================
+      - name: Encontrar ISO final
+        id: finaliso
+        shell: powershell
+        run: |
+          $iso = Get-ChildItem D:\W10UI -Recurse *.iso | sort LastWriteTime -desc | select -first 1
+          echo file=$($iso.FullName)>>$env:GITHUB_OUTPUT
 
-    # ================================
-    # 🔥 LIMPAR
-    # ================================
-    - name: Limpar temporários
-      run: |
-        rmdir /s /q updates
-        rmdir /s /q W10UI
+      # ================================
+      # 🔥 SPLIT
+      # ================================
+      - name: Split ISO
+        shell: powershell
+        run: |
+          & "C:\Program Files\7-Zip\7z.exe" a parts.7z "${{ steps.finaliso.outputs.file }}" -v1900m
 
-    # ================================
-    # 🔥 ESD
-    # ================================
-    - name: Converter ESD
-      shell: powershell
-      run: |
-        dism /Export-Image /SourceImageFile:work\sources\install.wim `
-        /SourceIndex:1 `
-        /DestinationImageFile:work\sources\install.esd `
-        /Compress:recovery
-
-        del work\sources\install.wim
-
-    # ================================
-    # 🔥 ISO
-    # ================================
-    - name: Instalar ADK
-      run: choco install windows-adk -y
-
-    - name: Criar ISO
-      shell: powershell
-      run: |
-        $ver = "${{ steps.version.outputs.version }}"
-        $isoName = "Windows 10 LTSC 21H2 ($ver).iso"
-
-        $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
-
-        & $oscdimg -bwork\boot\etfsboot.com -u2 -h -m -o -lWIN10_LTSC work "$isoName"
-
-    # ================================
-    # 🔥 LIMPAR WORK
-    # ================================
-    - name: Limpar work
-      run: rmdir /s /q work
-
-    # ================================
-    # 🔥 SPLIT 1900MB
-    # ================================
-    - name: Split ISO
-      shell: powershell
-      run: |
-        $file = Get-ChildItem *.iso | Select-Object -First 1
-        & "C:\Program Files\7-Zip\7z.exe" a split.7z $file.Name -v1900m
-        del $file.Name
-
-    # ================================
-    # 📦 UPLOAD FINAL
-    # ================================
-    - name: Upload
-      uses: actions/upload-artifact@v4
-      with:
-        name: LTSC-FINAL
-        path: split.7z.*
+      # ================================
+      # 📦 RELEASE
+      # ================================
+      - name: Upload Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: build-${{ github.run_id }}
+          name: Build ${{ github.run_id }}
+          artifacts: parts.7z.*
