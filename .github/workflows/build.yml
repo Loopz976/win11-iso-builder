@@ -1,4 +1,4 @@
-name: Win11 PRO W10UI FINAL
+name: Win11 PRO W10UI LITE
 
 on:
   workflow_dispatch:
@@ -9,152 +9,115 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 420
+    timeout-minutes: 360
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Instalar 7zip
         run: choco install 7zip -y
 
-      - name: Criar pastas
+      - name: Preparar ambiente
         shell: powershell
         run: |
-          New-Item -ItemType Directory -Path C:\work -Force
-          New-Item -ItemType Directory -Path C:\base -Force
-          New-Item -ItemType Directory -Path C:\ISO -Force
-          New-Item -ItemType Directory -Path C:\out -Force
-          New-Item -ItemType Directory -Path C:\drv -Force
-          New-Item -ItemType Directory -Path C:\updates -Force
+          mkdir C:\ISO
+          mkdir C:\base
+          mkdir C:\out
 
-      # 🔽 BASE
+      # BASE
       - name: Baixar base
         shell: powershell
         run: |
-          curl.exe -L -o C:\work\base.7z.001 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.001
-          curl.exe -L -o C:\work\base.7z.002 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.002
-          curl.exe -L -o C:\work\base.7z.003 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003
-          curl.exe -L -o C:\work\base.7z.004 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004
+          curl.exe -L -o base.7z.001 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.001
+          curl.exe -L -o base.7z.002 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.002
+          curl.exe -L -o base.7z.003 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003
+          curl.exe -L -o base.7z.004 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004
 
-      - name: Extrair base
+          & "C:\Program Files\7-Zip\7z.exe" x base.7z.001 -oC:\base -y
+
+      # LOCALIZAR
+      - name: Encontrar arquivos
+        id: f
         shell: powershell
         run: |
-          & "C:\Program Files\7-Zip\7z.exe" x C:\work\base.7z.001 -oC:\base -y
+          $f = Get-ChildItem C:\base -Recurse -Directory | Where {$_.Name -eq "Files"} | Select -First 1
+          $i = Get-ChildItem $f.FullName -Recurse -Filter *.iso | Select -First 1
+          echo "files=$($f.FullName)" >> $env:GITHUB_OUTPUT
+          echo "iso=$($i.FullName)" >> $env:GITHUB_OUTPUT
 
-      # 🔍 LOCALIZAR
-      - name: Localizar Files e ISO
-        id: find
-        shell: powershell
-        run: |
-          $files = Get-ChildItem C:\base -Recurse -Directory | Where-Object {$_.Name -eq "Files"} | Select-Object -First 1
-          if (-not $files) { throw "Files não encontrado" }
-
-          $iso = Get-ChildItem $files.FullName -Recurse -Filter *.iso | Select-Object -First 1
-          if (-not $iso) { throw "ISO não encontrada" }
-
-          echo "files=$($files.FullName)" >> $env:GITHUB_OUTPUT
-          echo "iso=$($iso.FullName)" >> $env:GITHUB_OUTPUT
-
-      # 📦 EXTRAIR ISO
+      # EXTRAIR ISO
       - name: Extrair ISO
         shell: powershell
         run: |
-          & "C:\Program Files\7-Zip\7z.exe" x "${{ steps.find.outputs.iso }}" -oC:\ISO -y
+          & "C:\Program Files\7-Zip\7z.exe" x "${{ steps.f.outputs.iso }}" -oC:\ISO -y
 
-      # 🔧 GARANTIR WIM
-      - name: Garantir install.wim
+      # GARANTIR WIM + INDEX 4
+      - name: Preparar install.wim
         shell: powershell
         run: |
           if (!(Test-Path "C:\ISO\sources\install.wim")) {
-            if (Test-Path "C:\ISO\sources\install.esd") {
-              dism /Export-Image /SourceImageFile:C:\ISO\sources\install.esd /All /DestinationImageFile:C:\ISO\sources\install.wim /Compress:max
-            } else {
-              throw "Nenhum install encontrado"
-            }
+            dism /Export-Image /SourceImageFile:C:\ISO\sources\install.esd /All /DestinationImageFile:C:\ISO\sources\install.wim
           }
 
-      # 🎯 INDEX 4
-      - name: Manter somente PRO
+          dism /Export-Image /SourceImageFile:C:\ISO\sources\install.wim /SourceIndex:4 /DestinationImageFile:C:\ISO\sources\install_new.wim
+          del C:\ISO\sources\install.wim
+          ren C:\ISO\sources\install_new.wim install.wim
+
+      # DRIVER
+      - name: Driver NVIDIA
         shell: powershell
         run: |
-          dism /Export-Image /SourceImageFile:C:\ISO\sources\install.wim /SourceIndex:4 /DestinationImageFile:C:\ISO\sources\install_new.wim /Compress:max
-          Remove-Item C:\ISO\sources\install.wim -Force
-          Rename-Item C:\ISO\sources\install_new.wim install.wim
+          curl.exe -L -o nv.exe https://us.download.nvidia.com/Windows/342.01/342.01-desktop-win10-64bit-international.exe
+          & "C:\Program Files\7-Zip\7z.exe" x nv.exe -onv -y
+          mkdir "${{ steps.f.outputs.files }}\Drivers\OS"
+          copy nv\Display.Driver "${{ steps.f.outputs.files }}\Drivers\OS" -Recurse
 
-      # 🎮 DRIVER
-      - name: Driver NVIDIA (OS only)
+      # UPDATE
+      - name: Baixar MSU
         shell: powershell
         run: |
-          curl.exe -L -o C:\drv\nv.exe https://us.download.nvidia.com/Windows/342.01/342.01-desktop-win10-64bit-international.exe
-          & "C:\Program Files\7-Zip\7z.exe" x C:\drv\nv.exe -oC:\drv\nv -y
+          curl.exe -L -o kb.msu https://catalog.s.download.windowsupdate.com/c/msdownload/update/software/updt/2026/04/windows11.0-kb5082052-x64.msu
+          copy kb.msu "${{ steps.f.outputs.files }}"
 
-          New-Item -ItemType Directory -Path "${{ steps.find.outputs.files }}\Drivers\OS" -Force
-          Copy-Item C:\drv\nv\Display.Driver "${{ steps.find.outputs.files }}\Drivers\OS" -Recurse -Force
-
-      # 🔄 UPDATE
-      - name: Baixar update MSU
+      # W10UI CONFIG
+      - name: Criar INI
         shell: powershell
         run: |
-          curl.exe -L -o C:\updates\kb.msu https://catalog.s.download.windowsupdate.com/c/msdownload/update/software/updt/2026/04/windows11.0-kb5082052-x64.msu
-          Copy-Item C:\updates\kb.msu "${{ steps.find.outputs.files }}" -Force
-
-      # 🧠 CONFIG W10UI (FIX REAL)
-      - name: Criar W10UI.ini correto
-        shell: powershell
-        run: |
-          $iniPath = Join-Path "${{ steps.find.outputs.files }}" "W10UI.ini"
-
-          @"
+          $ini = "${{ steps.f.outputs.files }}\W10UI.ini"
+          $c = @"
 Target=C:\ISO
 Repo=Files
-
 AutoStart=1
 ISO=1
-Cleanup=1
-ResetBase=1
-Rebuild=1
-
 AddUpdates=1
 AddDrivers=1
-
 wim2esd=1
-SkipWinRE=1
-"@ | Out-File $iniPath -Encoding ASCII -Force
+Cleanup=1
+"@
+          $c | Out-File $ini -Encoding ASCII
 
-      # 🧹 LIMPEZA
-      - name: Limpeza antes do W10UI
-        shell: powershell
-        run: |
-          dism /Cleanup-Wim
-          Remove-Item $env:TEMP\* -Recurse -Force -ErrorAction SilentlyContinue
-
-      # 🚀 W10UI
+      # RODAR
       - name: Rodar W10UI
         shell: cmd
-        working-directory: ${{ steps.find.outputs.files }}
+        working-directory: ${{ steps.f.outputs.files }}
         run: W10UI.cmd
 
-      # 🔍 ISO FINAL
-      - name: Encontrar ISO final
-        id: final
+      # FINAL
+      - name: Pegar ISO
+        id: iso
         shell: powershell
         run: |
-          $iso = Get-ChildItem C:\ -Recurse -Filter *.iso | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-          if (-not $iso) { throw "ISO não encontrada" }
-          echo "iso=$($iso.FullName)" >> $env:GITHUB_OUTPUT
+          $i = Get-ChildItem C:\ -Recurse -Filter *.iso | Sort LastWriteTime -Descending | Select -First 1
+          echo "iso=$($i.FullName)" >> $env:GITHUB_OUTPUT
 
-      # 📦 SPLIT
-      - name: Compactar ISO
+      - name: Compactar
         shell: powershell
         run: |
-          & "C:\Program Files\7-Zip\7z.exe" a -tzip -v1900m C:\out\ISO.zip "${{ steps.final.outputs.iso }}"
+          & "C:\Program Files\7-Zip\7z.exe" a -v1900m C:\out\iso.zip "${{ steps.iso.outputs.iso }}"
 
-      # 🚀 RELEASE
-      - name: Upload Release
+      - name: Upload
         uses: ncipollo/release-action@v1
         with:
-          tag: win11-${{ github.run_id }}
-          name: Win11 PRO FINAL
-          artifacts: C:\out\ISO.zip*
+          tag: build-${{ github.run_id }}
+          artifacts: C:\out\iso.zip*
           token: ${{ github.token }}
