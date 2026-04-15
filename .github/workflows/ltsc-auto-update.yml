@@ -1,4 +1,4 @@
-name: LTSC Auto Updated ISO
+name: TESTE PIPELINE
 
 on:
   workflow_dispatch:
@@ -7,130 +7,30 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  test:
     runs-on: windows-2022
-    timeout-minutes: 360
 
     steps:
-    - name: Variáveis
-      shell: powershell
-      run: |
-        echo "ISO_URL=https://windows.timefa.de/10/ltsc/pt-br_windows_10_enterprise_ltsc_2021_x64_dvd_f318268e.iso" >> $env:GITHUB_ENV
-        echo "ISO_FILE=source.iso" >> $env:GITHUB_ENV
-        echo "WORK=work" >> $env:GITHUB_ENV
-        echo "MOUNT=mount" >> $env:GITHUB_ENV
-        echo "OUT=out" >> $env:GITHUB_ENV
-        echo "ARCH=W10LTSC2021_UPDATED" >> $env:GITHUB_ENV
-        echo "TAG=ltsc-auto-${{ github.run_id }}" >> $env:GITHUB_ENV
+    - name: Teste variáveis
+      run: echo OK
 
-    # 🔽 BAIXAR ISO
-    - name: Baixar ISO
+    # 🔽 TESTAR DOWNLOAD DAS PARTES
+    - name: Baixar partes
       run: |
-        curl -L --retry 5 --retry-delay 5 -o "$env:ISO_FILE" "$env:ISO_URL"
+        curl -L -o part1.7z.001 "https://github.com/Loopz976/win11-iso-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001"
 
-    # 📂 PREPARAR
-    - name: Criar estrutura
-      run: |
-        mkdir $env:WORK
-        mkdir $env:MOUNT
-        mkdir $env:OUT
-        mkdir updates
-
-    # 📦 EXTRAIR ISO
-    - name: Extrair ISO
-      run: |
-        powershell Mount-DiskImage -ImagePath $env:ISO_FILE
-        $drive = (Get-DiskImage $env:ISO_FILE | Get-Volume).DriveLetter
-        robocopy "$drive`:\" $env:WORK /E
-        powershell Dismount-DiskImage -ImagePath $env:ISO_FILE
-
-    # 🔽 BAIXAR UUP DUMP (ATUALIZAÇÕES)
-    - name: Baixar UUP script
-      run: |
-        curl -L -o uup.zip "https://uupdump.net/get.php?id=19044&pack=pt-br&edition=enterprise&aria2=2"
-        powershell Expand-Archive uup.zip -DestinationPath uup
-
-    # 🔧 CONFIGURAR UUP (SÓ UPDATES)
-    - name: Configurar UUP
-      run: |
-        cd uup
-        powershell -Command "(Get-Content ConvertConfig.ini) -replace 'SkipISO=0','SkipISO=1' | Set-Content ConvertConfig.ini"
-        powershell -Command "(Get-Content uup_download_windows.cmd) -replace 'pause','' | Set-Content uup_download_windows.cmd"
-
-    # 🚀 BAIXAR UPDATES
-    - name: Baixar updates
-      run: |
-        cd uup
-        cmd /c uup_download_windows.cmd
-
-    # 📂 MOVER UPDATES
-    - name: Organizar updates
-      run: |
-        robocopy uup updates *.cab /S
-
-    # 🔄 CONVERTER ESD → WIM (se necessário)
-    - name: Preparar WIM
-      run: |
-        if exist "%WORK%\sources\install.esd" (
-          dism /Export-Image /SourceImageFile:%WORK%\sources\install.esd /SourceIndex:1 /DestinationImageFile:%WORK%\sources\install.wim /Compress:max
-          del %WORK%\sources\install.esd
-        )
-
-    # 🧱 MONTAR
-    - name: Montar imagem
-      run: |
-        dism /Mount-Wim /WimFile:%WORK%\sources\install.wim /index:1 /MountDir:%MOUNT%
-
-    # 🔧 INTEGRAR UPDATES
-    - name: Integrar updates
-      run: |
-        dism /Image:%MOUNT% /Add-Package /PackagePath:updates
-
-    # 🧹 LIMPEZA TOTAL
-    - name: Limpeza profunda
-      run: |
-        dism /Image:%MOUNT% /Cleanup-Image /StartComponentCleanup /ResetBase
-
-    # 💾 FINALIZAR
-    - name: Commit
-      run: |
-        dism /Unmount-Wim /MountDir:%MOUNT% /Commit
-
-    # 🔄 CONVERTER PARA ESD
-    - name: Converter para ESD
-      run: |
-        dism /Export-Image /SourceImageFile:%WORK%\sources\install.wim /SourceIndex:1 /DestinationImageFile:%WORK%\sources\install.esd /Compress:recovery
-        del %WORK%\sources\install.wim
-
-    # 🧱 CRIAR ISO
-    - name: Criar ISO
-      run: |
-        oscdimg -m -o -u2 -udfver102 %WORK% %OUT%\final.iso
-
-    # 📦 7ZIP
+    # 📦 TESTAR EXTRAÇÃO
     - name: Instalar 7zip
       run: choco install 7zip -y
 
-    # 📦 COMPACTAR
-    - name: Compactar
+    - name: Testar extração
       shell: powershell
       run: |
-        & "C:\Program Files\7-Zip\7z.exe" a -t7z -v1900m -mx=9 "$env:ARCH.7z" "$env:OUT\final.iso"
+        & "C:\Program Files\7-Zip\7z.exe" x part1.7z.001 -aoa
 
-    # 🚀 RELEASE
-    - name: Criar Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ env.TAG }}
-        name: W10 LTSC 2021 Updated
-        body: |
-          Windows 10 LTSC 2021 atualizado automaticamente
+    # 🔽 TESTAR UUP DOWNLOAD
+    - name: Baixar UUP
+      run: |
+        curl -L -o uup.zip "https://uupdump.net/get.php?id=19044&pack=pt-br&edition=enterprise&aria2=2"
 
-          • Updates oficiais Microsoft
-          • Limpeza total (ResetBase)
-          • Compressão ESD (máxima)
-          • ISO pronta para instalação
-
-        files: W10LTSC2021_UPDATED.7z*
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Extrair
