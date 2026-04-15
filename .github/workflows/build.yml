@@ -22,43 +22,33 @@ jobs:
           curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003" -o C:\work\files.zip.003
           curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004" -o C:\work\files.zip.004
 
-      # 📦 Extrair com 7zip (usa todas partes)
-      - name: Extrair com 7zip
+      # 📦 Extrair pacote (todas partes)
+      - name: Extrair pacote
         shell: powershell
         run: |
           & "C:\Program Files\7-Zip\7z.exe" x C:\work\files.zip.001 -oC:\work\extract -y
 
-      # 🔍 Localizar ISO dentro da pasta Files
+      # 🔍 Localizar ISO
       - name: Localizar ISO
         shell: powershell
         run: |
           $iso = Get-ChildItem -Path C:\work\extract\Files -Recurse -Filter "Win11*.iso" | Select-Object -First 1
 
           if (-not $iso) {
-            Write-Host "Conteúdo encontrado:"
-            Get-ChildItem -Path C:\work\extract -Recurse
+            Get-ChildItem -Recurse C:\work\extract
             throw "ISO não encontrada"
           }
 
           Copy-Item $iso.FullName C:\work\base.iso
-          Write-Host "ISO encontrada:" $iso.FullName
 
-      # 💿 Montar ISO
-      - name: Montar ISO
+      # 📦 Extrair ISO COMPLETA (sem montar)
+      - name: Extrair ISO
         shell: powershell
         run: |
-          $mount = Mount-DiskImage -ImagePath C:\work\base.iso -PassThru
-          $drive = ($mount | Get-Volume).DriveLetter + ":"
-          echo "DRIVE=$drive" >> $env:GITHUB_ENV
+          & "C:\Program Files\7-Zip\7z.exe" x C:\work\base.iso -oC:\iso -y
 
-      # 📂 Copiar conteúdo ISO
-      - name: Copiar conteúdo
-        shell: powershell
-        run: |
-          robocopy $env:DRIVE C:\iso /E
-
-      # 🔍 Detectar install.wim ou install.esd
-      - name: Detectar imagem
+      # 🔍 Detectar imagem
+      - name: Detectar install.wim ou esd
         shell: powershell
         run: |
           if (Test-Path "C:\iso\sources\install.wim") {
@@ -66,10 +56,10 @@ jobs:
           } elseif (Test-Path "C:\iso\sources\install.esd") {
             echo "IMG=C:\iso\sources\install.esd" >> $env:GITHUB_ENV
           } else {
-            throw "Nenhum install.wim ou install.esd encontrado"
+            throw "Imagem não encontrada"
           }
 
-      # 🔄 Exportar apenas PRO (index 4)
+      # 🔄 Exportar index 4 (PRO)
       - name: Exportar PRO
         run: |
           dism /Export-Image /SourceImageFile:$env:IMG /SourceIndex:4 /DestinationImageFile:C:\iso\sources\install_new.wim /Compress:max
@@ -78,8 +68,8 @@ jobs:
       - name: Substituir imagem
         shell: powershell
         run: |
-          if (Test-Path "C:\iso\sources\install.wim") { Remove-Item C:\iso\sources\install.wim }
-          if (Test-Path "C:\iso\sources\install.esd") { Remove-Item C:\iso\sources\install.esd }
+          Remove-Item C:\iso\sources\install.wim -ErrorAction SilentlyContinue
+          Remove-Item C:\iso\sources\install.esd -ErrorAction SilentlyContinue
           Rename-Item C:\iso\sources\install_new.wim install.wim
 
       # 🔧 Instalar ADK
@@ -94,14 +84,14 @@ jobs:
           $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
           & $oscdimg -bC:\iso\boot\etfsboot.com -u2 -h -m -lWIN11_23H2_PRO_FINAL C:\iso C:\work\Win11_23H2_Pro_Final.iso
 
-      # 📦 Compactar em partes 1900MB
+      # 📦 Compactar ISO em partes
       - name: Compactar ISO
         shell: powershell
         run: |
           & "C:\Program Files\7-Zip\7z.exe" a -tzip C:\work\Win11_23H2_Pro_Final.zip C:\work\Win11_23H2_Pro_Final.iso -v1900m
 
-      # 📤 Upload Release
-      - name: Upload
+      # 📤 Upload
+      - name: Upload Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: win11-23h2-pro-final
@@ -111,5 +101,5 @@ jobs:
 
             - Edition: Professional (Index 4)
             - Clean base
-            - Split 1900MB
+            - Ready for customization
           files: C:\work\Win11_23H2_Pro_Final.zip.*
