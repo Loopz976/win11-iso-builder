@@ -1,0 +1,25 @@
+name: Build Windows 11 ISO
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Rodar scripts
+        shell: powershell
+        run: |
+          ./scripts/download_iso.ps1
+          ./scripts/download_updates.ps1
+          ./scripts/driver_nvidia.ps1
+          ./scripts/integrate.ps1
+          ./scripts/build_iso.ps1
+
+      - name: Upload ISO
+        uses: softprops/action-gh-release@v1
+        with:
+          files: C:\final.iso
