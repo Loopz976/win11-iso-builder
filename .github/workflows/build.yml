@@ -1,4 +1,4 @@
-name: Build Windows ISO (UUP)
+name: Build ISO + Split + Release
 
 on:
   workflow_dispatch:
@@ -6,40 +6,55 @@ on:
 jobs:
   build:
     runs-on: windows-2022
-
     timeout-minutes: 360
 
     steps:
-    - name: Baixar UUP dump zip
+    - name: Baixar UUP dump zip (OneDrive fix)
+      shell: powershell
       run: |
-        curl -L -o uup.zip "https://1drv.ms/u/c/579080100cd71c41/IQDtC9_-n55VSajuyWiEOvt8AQKL9l00UNtApMK7mvPtKCk"
+        $url = "https://1drv.ms/u/c/579080100cd71c41/IQDtC9_-n55VSajuyWiEOvt8AQKL9l00UNtApMK7mvPtKCk"
+        $output = "uup.zip"
+
+        $resp = Invoke-WebRequest -Uri $url -MaximumRedirection 10
+        $downloadUrl = $resp.Links | Where-Object { $_.href -like "*download*" } | Select-Object -First 1 -ExpandProperty href
+
+        if (-not $downloadUrl) {
+          $downloadUrl = $resp.BaseResponse.ResponseUri.AbsoluteUri
+        }
+
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $output
 
     - name: Extrair UUP
-      run: |
-        powershell -Command "Expand-Archive -Path uup.zip -DestinationPath uup"
+      run: powershell -Command "Expand-Archive -Path uup.zip -DestinationPath uup"
 
-    - name: Ajustar script (anti-travamento)
+    - name: Remover pause
       run: |
         cd uup
         powershell -Command "(Get-Content uup_download_windows.cmd) -replace 'pause','' | Set-Content uup_download_windows.cmd"
 
-    - name: Rodar UUP (baixar + converter + ISO)
+    - name: Rodar UUP (gera ISO)
       run: |
         cd uup
         cmd /c uup_download_windows.cmd
 
-    - name: Limpeza para liberar espaço
+    - name: Instalar 7zip
+      run: choco install 7zip -y
+
+    - name: Compactar ISO em partes (1900MB)
       run: |
         cd uup
-        del /s /q *.esd
-        del /s /q *.cab
-        del /s /q *.wim
+        for %%f in (*.iso) do (
+          "C:\Program Files\7-Zip\7z.exe" a -t7z -v1900m -mx=9 split.7z "%%f"
+        )
 
-    - name: Listar ISO gerada
+    - name: Listar arquivos finais
       run: dir uup
 
-    - name: Upload ISO
-      uses: actions/upload-artifact@v4
+    - name: Criar Release
+      uses: softprops/action-gh-release@v2
       with:
-        name: Windows-ISO
-        path: uup/*.iso
+        tag_name: iso-build-${{ github.run_id }}
+        name: ISO Build ${{ github.run_id }}
+        files: uup/split.7z*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
