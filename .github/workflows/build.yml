@@ -1,4 +1,4 @@
-name: TESTE W10UI TARGET OK
+name: TESTE W10UI AUTO PATH
 
 on:
   workflow_dispatch:
@@ -17,23 +17,30 @@ jobs:
       - name: Instalar 7zip
         run: choco install 7zip -y
 
-      - name: Baixar W10UI (OK)
+      - name: Baixar W10UI
         shell: powershell
         run: |
           curl.exe -L -o w10ui.zip https://codeload.github.com/abbodi1406/WHD/zip/refs/heads/master
           & "C:\Program Files\7-Zip\7z.exe" x w10ui.zip -oC:\ -y
-          Rename-Item "C:\WHD-master" "C:\w10ui"
 
-      - name: Ver estrutura (debug)
+      # 🔥 ENCONTRAR O W10UI.cmd AUTOMATICO
+      - name: Encontrar W10UI
+        id: find
         shell: powershell
         run: |
-          dir C:\w10ui -Recurse
+          $cmd = Get-ChildItem C:\ -Recurse -Filter W10UI.cmd | Select -First 1
+          if (!$cmd) { throw "W10UI.cmd não encontrado" }
+
+          $dir = $cmd.DirectoryName
+          echo "dir=$dir" >> $env:GITHUB_OUTPUT
+
+          Write-Host "Encontrado em: $dir"
 
       - name: Rodar W10UI FORÇADO
         shell: cmd
-        working-directory: C:\w10ui\WHD\W10UI
+        working-directory: ${{ steps.find.outputs.dir }}
         run: |
           set "target=C:\ISO"
-          set "repo=C:\w10ui\WHD\W10UI"
+          set "repo=${{ steps.find.outputs.dir }}"
           set "autostart=1"
           W10UI.cmd
