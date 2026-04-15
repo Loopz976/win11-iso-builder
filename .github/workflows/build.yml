@@ -1,47 +1,161 @@
-name: Teste ISO com mkisofs
+name: Build Win11 ISO PRO (W10UI AUTO)
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 420
 
     steps:
 
-      - name: Instalar mkisofs
-        run: choco install cdrtools -y
+      - uses: actions/checkout@v4
 
-      - name: Preparar estrutura ISO
+      # -------------------------
+      # 7ZIP
+      # -------------------------
+      - name: Instalar 7zip
+        run: choco install 7zip -y
+
+      # -------------------------
+      # PASTAS
+      # -------------------------
+      - name: Preparar ambiente
         shell: powershell
         run: |
+          $ErrorActionPreference = "Stop"
+
+          mkdir C:\work
+          mkdir C:\base
           mkdir C:\iso
-          mkdir C:\iso\boot
+          mkdir C:\out
 
-          echo TESTE > C:\iso\arquivo.txt
-          echo BOOT > C:\iso\boot\etfsboot.com
-
-      - name: Criar ISO bootável
+      # -------------------------
+      # BAIXAR PARTES
+      # -------------------------
+      - name: Baixar partes ISO base
         shell: powershell
         run: |
-          mkisofs `
-            -o C:\work\teste.iso `
-            -b boot/etfsboot.com `
-            -no-emul-boot `
-            -boot-load-size 8 `
-            -iso-level 3 `
-            -udf `
-            -J -R `
-            C:\iso
+          curl.exe -L -o C:\work\files.zip.001 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.001
+          curl.exe -L -o C:\work\files.zip.002 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.002
+          curl.exe -L -o C:\work\files.zip.003 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003
+          curl.exe -L -o C:\work\files.zip.004 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004
 
-          if (!(Test-Path "C:\work\teste.iso")) {
-            throw "ISO não foi criada"
-          }
+      # -------------------------
+      # EXTRAIR MULTIPART
+      # -------------------------
+      - name: Extrair ZIP multipart
+        shell: powershell
+        run: |
+          & "C:\Program Files\7-Zip\7z.exe" x C:\work\files.zip.001 -oC:\base -y
 
-          Write-Host "ISO criada com sucesso!"
+      # -------------------------
+      # LOCALIZAR FILES + ISO
+      # -------------------------
+      - name: Localizar ISO
+        id: iso
+        shell: powershell
+        run: |
+          $files = Get-ChildItem C:\base -Recurse -Directory | Where {$_.Name -eq "Files"} | Select -First 1
 
-      - name: Upload
-        uses: actions/upload-artifact@v4
+          if (!$files) { throw "Pasta Files não encontrada" }
+
+          $iso = Get-ChildItem $files.FullName -Filter *.iso -Recurse | Select -First 1
+
+          if (!$iso) { throw "ISO não encontrada" }
+
+          echo "iso=$($iso.FullName)" >> $env:GITHUB_OUTPUT
+          echo "files=$($files.FullName)" >> $env:GITHUB_OUTPUT
+
+      # -------------------------
+      # EXTRAIR ISO
+      # -------------------------
+      - name: Extrair ISO base
+        shell: powershell
+        run: |
+          & "C:\Program Files\7-Zip\7z.exe" x "${{ steps.iso.outputs.iso }}" -oC:\iso -y
+
+      # -------------------------
+      # LIMPAR LIXO PRA ESPAÇO
+      # -------------------------
+      - name: Limpeza pesada
+        shell: powershell
+        run: |
+          Remove-Item C:\work -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item C:\base -Recurse -Force -ErrorAction SilentlyContinue
+
+      # -------------------------
+      # CONFIG W10UI
+      # -------------------------
+      - name: Configurar W10UI.ini
+        shell: powershell
+        run: |
+          $ini = Join-Path "${{ steps.iso.outputs.files }}" "W10UI.ini"
+
+          (Get-Content $ini) `
+            -replace 'Target\s*=.*',"Target=C:\iso" `
+            -replace 'AutoStart\s*=.*',"AutoStart=1" `
+            -replace 'ISO\s*=.*',"ISO=1" `
+            -replace 'SkipWinRE\s*=.*',"SkipWinRE=1" `
+            -replace 'Cleanup\s*=.*',"Cleanup=1" `
+            | Set-Content $ini
+
+      # -------------------------
+      # FORÇAR INDEX 4 (PRO)
+      # -------------------------
+      - name: Exportar apenas PRO
+        shell: powershell
+        run: |
+          dism /Export-Image `
+            /SourceImageFile:C:\iso\sources\install.wim `
+            /SourceIndex:4 `
+            /DestinationImageFile:C:\iso\sources\install_new.wim `
+            /Compress:max
+
+          Remove-Item C:\iso\sources\install.wim
+          Rename-Item C:\iso\sources\install_new.wim install.wim
+
+      # -------------------------
+      # RODAR W10UI (CRIA ISO)
+      # -------------------------
+      - name: Rodar W10UI
+        shell: cmd
+        working-directory: ${{ steps.iso.outputs.files }}
+        run: |
+          call W10UI.cmd
+
+      # -------------------------
+      # LOCALIZAR ISO FINAL
+      # -------------------------
+      - name: Localizar ISO final
+        id: final
+        shell: powershell
+        run: |
+          $iso = Get-ChildItem C:\ -Recurse -Filter *.iso | Sort LastWriteTime -Descending | Select -First 1
+
+          if (!$iso) { throw "ISO final não encontrada" }
+
+          echo "iso=$($iso.FullName)" >> $env:GITHUB_OUTPUT
+
+      # -------------------------
+      # SPLIT 1900MB
+      # -------------------------
+      - name: Compactar ISO (split)
+        shell: powershell
+        run: |
+          & "C:\Program Files\7-Zip\7z.exe" a -tzip -v1900m C:\out\ISO.zip "${{ steps.final.outputs.iso }}"
+
+      # -------------------------
+      # RELEASE
+      # -------------------------
+      - name: Upload Release
+        uses: ncipollo/release-action@v1
         with:
-          name: teste-iso
-          path: C:\work\teste.iso
+          tag: "win11-pro-${{ github.run_id }}"
+          name: "Win11 PRO ISO ${{ github.run_id }}"
+          artifacts: "C:\out\ISO.zip*"
+          token: ${{ github.token }}
