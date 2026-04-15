@@ -9,12 +9,14 @@ jobs:
 
     steps:
 
+      # 📁 Preparar ambiente
       - name: Preparar ambiente
         shell: powershell
         run: |
           mkdir C:\work
           mkdir C:\iso
 
+      # 📦 Instalar 7zip
       - name: Instalar 7zip
         run: choco install 7zip -y
 
@@ -26,7 +28,7 @@ jobs:
           curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003" -o C:\work\files.zip.003
           curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004" -o C:\work\files.zip.004
 
-      # 📦 Extrair zip multi-part
+      # 📦 Extrair multipart (automático via .001)
       - name: Extrair pacote
         shell: powershell
         run: |
@@ -36,7 +38,7 @@ jobs:
       - name: Localizar ISO
         shell: powershell
         run: |
-          $iso = Get-ChildItem -Path C:\work\extract\Files -Recurse -Filter "*.iso" | Select-Object -First 1
+          $iso = Get-ChildItem -Path C:\work\extract -Recurse -Filter *.iso | Select-Object -First 1
           if (-not $iso) { throw "ISO não encontrada" }
           Copy-Item $iso.FullName C:\work\base.iso
 
@@ -58,7 +60,7 @@ jobs:
             throw "install não encontrado"
           }
 
-      # 🔄 Exportar PRO (index 4)
+      # 🔄 Exportar somente PRO (index 4)
       - name: Exportar PRO
         shell: powershell
         run: |
@@ -67,54 +69,40 @@ jobs:
           Remove-Item C:\iso\sources\install.esd -Force -ErrorAction SilentlyContinue
           Rename-Item C:\iso\sources\install_pro.wim install.wim
 
-      # 🧹 LIMPEZA CRÍTICA (RESOLVE ERRO DE ESPAÇO)
+      # 🧹 LIMPEZA PESADA (resolve erro de espaço)
       - name: Limpeza pesada
         shell: powershell
         run: |
-          Write-Host "Limpando arquivos pesados..."
-
           Remove-Item C:\work\*.zip* -Force -ErrorAction SilentlyContinue
           Remove-Item C:\work\base.iso -Force -ErrorAction SilentlyContinue
           Remove-Item C:\work\extract -Recurse -Force -ErrorAction SilentlyContinue
-
           Remove-Item C:\Users\runneradmin\AppData\Local\Temp\* -Recurse -Force -ErrorAction SilentlyContinue
-          Remove-Item C:\Windows\SoftwareDistribution\Download -Recurse -Force -ErrorAction SilentlyContinue
 
-          Write-Host "Espaço liberado!"
-
-      # 🔧 Instalar ADK
-      - name: Instalar ADK
+      # 🔽 Baixar oscdimg portátil (SEM ADK)
+      - name: Baixar oscdimg
         shell: powershell
         run: |
-          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2196224" -OutFile adk.exe
-          Start-Process .\adk.exe -ArgumentList "/quiet /norestart /features OptionId.DeploymentTools" -Wait
+          curl -L "https://github.com/abbodi1406/vcredist/raw/master/bin/oscdimg.exe" -o C:\work\oscdimg.exe
+          if (!(Test-Path "C:\work\oscdimg.exe")) { throw "Falha ao baixar oscdimg" }
 
-      # 🔍 Localizar oscdimg
-      - name: Localizar oscdimg
-        shell: powershell
-        run: |
-          $path = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe | Select-Object -First 1
-          if (-not $path) { throw "oscdimg não encontrado" }
-          echo "OSCDIMG=$($path.FullName)" >> $env:GITHUB_ENV
-
-      # 💿 Criar ISO FINAL
+      # 💿 Criar ISO FINAL BOOTÁVEL
       - name: Criar ISO FINAL
         shell: powershell
         run: |
-          & "$env:OSCDIMG" `
+          C:\work\oscdimg.exe `
           -bootdata:2#p0,e,bC:\iso\boot\etfsboot.com#pEF,e,bC:\iso\efi\microsoft\boot\efisys.bin `
           -u2 -udfver102 `
           -lWIN11_23H2_PRO `
           C:\iso `
           C:\work\Win11_23H2_Pro_Final.iso
 
-      # 📦 Compactar ISO
+      # 📦 Compactar ISO em partes
       - name: Compactar ISO
         shell: powershell
         run: |
           & "C:\Program Files\7-Zip\7z.exe" a -tzip C:\work\Win11.iso.zip C:\work\Win11_23H2_Pro_Final.iso -v1900m
 
-      # 📤 Upload
+      # 📤 Upload Release
       - name: Upload Release
         uses: softprops/action-gh-release@v1
         with:
