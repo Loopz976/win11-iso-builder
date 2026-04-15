@@ -33,4 +33,12 @@ jobs:
       run: |
         curl -L -o uup.zip "https://uupdump.net/get.php?id=19044&pack=pt-br&edition=enterprise&aria2=2"
 
-    - name: Extrair
+    - name: Extrair UUP
+      run: |
+        powershell Expand-Archive uup.zip -DestinationPath uup
+
+    - name: Testar script UUP
+      shell: cmd
+      run: |
+        cd uup
+        echo TESTE OK
