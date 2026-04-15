@@ -1,4 +1,4 @@
-name: BUILD ISO LTSC FULL (W10UI COMPLETO)
+name: BUILD ISO LTSC (PIPELINE COMPLETO FINAL)
 
 on:
   workflow_dispatch:
@@ -11,50 +11,50 @@ jobs:
       # 1. Checkout
       - uses: actions/checkout@v4
 
-      # 2. Criar estrutura base
-      - name: Estrutura inicial
+      # 2. Criar estrutura
+      - name: Estrutura base
         run: |
           mkdir work
           mkdir work\files
           mkdir work\base
 
-      # 3. Baixar ISO (3 PARTES - RELEASE)
-      - name: Baixar ISO LTSC
+      # 3. Baixar ISO (3 PARTES)
+      - name: Download ISO LTSC
         run: |
           cd work
           curl -L -o W10LTSC2021.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
           curl -L -o W10LTSC2021.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
           curl -L -o W10LTSC2021.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
-      # 4. Unir + extrair ISO
+      # 4. Extrair ISO (UNE AUTOMÁTICO)
       - name: Extrair ISO base
         run: |
           cd work
           7z x W10LTSC2021.7z.001 -oiso
 
-      # 5. Copiar ISO intacta para files
-      - name: ISO intacta
+      # 5. ISO intacta → files
+      - name: Copiar ISO intacta
         run: |
           move work\iso\*.iso work\files\base.iso
 
-      # 6. Extrair ISO para pasta BASE (TARGET)
-      - name: Extrair ISO (base)
+      # 6. Extrair ISO → base (TARGET)
+      - name: Extrair ISO completa
         run: |
           7z x work\files\base.iso -owork\base
 
       # 7. Baixar W10UI
-      - name: Baixar W10UI
+      - name: Download W10UI
         run: |
           cd work
           curl -L -o W10UI.zip https://tiny.cc/W10UI
 
-      # 8. Extrair W10UI dentro da files (RAIZ)
+      # 8. Extrair W10UI → files (RAIZ)
       - name: Extrair W10UI
         run: |
           7z x work\W10UI.zip -owork\files\
 
-      # 9. Baixar DRIVER NVIDIA 341.92
-      - name: Baixar driver NVIDIA
+      # 9. Baixar DRIVER NVIDIA
+      - name: Download driver NVIDIA
         run: |
           cd work
           curl -L -o nvidia.exe https://us.download.nvidia.com/Windows/341.92/341.92-desktop-win10-64bit-international.exe
@@ -65,23 +65,20 @@ jobs:
           mkdir work\nvidia
           7z x work\nvidia.exe -owork\nvidia
 
-      # 11. Integrar driver (Display.Driver → Video)
-      - name: Integrar driver
+      # 11. Preparar driver (SEM INTEGRAÇÃO)
+      - name: Preparar driver para W10UI
         run: |
-          mkdir work\files\Drivers\OS\Video
+          mkdir work\files\Drivers\OS
           xcopy /E /I /Y work\nvidia\Display.Driver work\files\Drivers\OS\Video
 
-          echo VALIDANDO INF:
-          dir work\files\Drivers\OS\Video\*.inf /s
-
-      # 12. Baixar updates (estrutura pronta)
+      # 12. Preparar updates (RAIZ files)
       - name: Preparar updates
         run: |
           mkdir work\files\updates
-          echo coloque_updates_aqui > work\files\updates\readme.txt
+          echo coloque_seus_updates_aqui > work\files\updates\readme.txt
 
-      # 13. Configurar W10UI.ini (COMPLETO)
-      - name: Criar W10UI.ini
+      # 13. Criar W10UI.ini (TOTALMENTE AUTOMÁTICO)
+      - name: Criar configuração W10UI
         run: |
           echo [W10UI] > work\files\W10UI.ini
           echo AutoStart=1 >> work\files\W10UI.ini
@@ -95,28 +92,28 @@ jobs:
           echo SkipISO=0 >> work\files\W10UI.ini
           echo Target=..\base >> work\files\W10UI.ini
 
-      # 14. Executar W10UI (PROCESSO PRINCIPAL)
+      # 14. EXECUTAR W10UI (PROCESSO PRINCIPAL)
       - name: Executar W10UI
         run: |
           cd work\files
-          echo === INICIANDO W10UI ===
+          echo === INICIO W10UI ===
           call W10UI.cmd
 
-      # 15. Mover ISO final
-      - name: Organizar saída
+      # 15. Coletar ISO final
+      - name: Coletar ISO final
         run: |
           mkdir output
           move work\files\*.iso output\
 
-      # 16. Compactar ISO final (1900MB)
-      - name: Compactar ISO
+      # 16. Compactar em partes 1900MB
+      - name: Compactar ISO final
         run: |
           cd output
-          7z a -v1900m FINAL_LTSC_COMPLETO.7z *.iso
+          7z a -v1900m LTSC_FINAL.7z *.iso
 
       # 17. Upload
-      - name: Upload final
+      - name: Upload resultado
         uses: actions/upload-artifact@v4
         with:
-          name: ISO_FINAL_COMPLETA
+          name: ISO_FINAL_LTSC
           path: output\*.7z
