@@ -14,24 +14,17 @@ jobs:
           mkdir C:\work
           mkdir C:\work\iso\sources
 
-      # 📥 Baixar ESD PRO (robusto)
+      # 📥 Baixar ESD (BITS - robusto)
       - name: Baixar ESD PRO
         shell: powershell
         run: |
-          $url = "http://dl.delivery.mp.microsoft.com/filestreamingservice/files/1ae4a20e-24d5-43f0-bcdd-b7d7e6b72864/22631.2861.231204-0538.23H2_NI_RELEASE_SVC_REFRESH_CLIENTCONSUMER_RET_x64FRE_pt-br.esd"
-          $output = "C:\work\install.esd"
+          $url = "https://dl.delivery.mp.microsoft.com/filestreamingservice/files/1ae4a20e-24d5-43f0-bcdd-b7d7e6b72864/22631.2861.231204-0538.23H2_NI_RELEASE_SVC_REFRESH_CLIENTCONSUMER_RET_x64FRE_pt-br.esd"
+          $dest = "C:\work\install.esd"
 
-          for ($i=1; $i -le 5; $i++) {
-            try {
-              Invoke-WebRequest -Uri $url -OutFile $output -Headers @{ "User-Agent"="Mozilla/5.0" }
-              if ((Get-Item $output).Length -gt 100MB) {
-                Write-Output "Download concluído!"
-                break
-              }
-            } catch {
-              Write-Output "Tentativa $i falhou..."
-              Start-Sleep -Seconds 10
-            }
+          Start-BitsTransfer -Source $url -Destination $dest
+
+          if (!(Test-Path $dest)) {
+            throw "Download falhou"
           }
 
       # 🔍 Detectar index PRO
@@ -60,7 +53,7 @@ jobs:
           $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
           & $oscdimg -u2 -h -m -lWIN11_23H2_PRO_BASE C:\work\iso C:\work\win11_pro_base.iso
 
-      # 📤 Upload no Releases
+      # 📤 Upload
       - name: Upload Release
         uses: softprops/action-gh-release@v1
         with:
