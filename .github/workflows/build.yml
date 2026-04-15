@@ -1,45 +1,45 @@
-name: TESTE W10UI FIX FINAL
+name: Build Windows ISO (UUP)
 
 on:
   workflow_dispatch:
 
 jobs:
-  test:
-    runs-on: windows-latest
+  build:
+    runs-on: windows-2022
+
+    timeout-minutes: 360
 
     steps:
-      - name: Criar ISO fake
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Path C:\ISO\sources -Force
-          New-Item C:\ISO\sources\install.wim -ItemType File
+    - name: Baixar UUP dump zip
+      run: |
+        curl -L -o uup.zip "https://1drv.ms/u/c/579080100cd71c41/IQDtC9_-n55VSajuyWiEOvt8AQKL9l00UNtApMK7mvPtKCk"
 
-      - name: Instalar 7zip
-        run: choco install 7zip -y
+    - name: Extrair UUP
+      run: |
+        powershell -Command "Expand-Archive -Path uup.zip -DestinationPath uup"
 
-      - name: Baixar W10UI
-        shell: powershell
-        run: |
-          curl.exe -L -o w10ui.zip https://codeload.github.com/abbodi1406/WHD/zip/refs/heads/master
-          & "C:\Program Files\7-Zip\7z.exe" x w10ui.zip -oC:\ -y
+    - name: Ajustar script (anti-travamento)
+      run: |
+        cd uup
+        powershell -Command "(Get-Content uup_download_windows.cmd) -replace 'pause','' | Set-Content uup_download_windows.cmd"
 
-      - name: Encontrar W10UI (FIX PERMISSÃO)
-        id: find
-        shell: powershell
-        run: |
-          $cmd = Get-ChildItem C:\WHD-master -Recurse -Filter W10UI.cmd | Select -First 1
-          if (!$cmd) { throw "W10UI.cmd não encontrado" }
+    - name: Rodar UUP (baixar + converter + ISO)
+      run: |
+        cd uup
+        cmd /c uup_download_windows.cmd
 
-          $dir = $cmd.DirectoryName
-          echo "dir=$dir" >> $env:GITHUB_OUTPUT
+    - name: Limpeza para liberar espaço
+      run: |
+        cd uup
+        del /s /q *.esd
+        del /s /q *.cab
+        del /s /q *.wim
 
-          Write-Host "Encontrado em: $dir"
+    - name: Listar ISO gerada
+      run: dir uup
 
-      - name: Rodar W10UI FORÇADO
-        shell: cmd
-        working-directory: ${{ steps.find.outputs.dir }}
-        run: |
-          set "_work=C:\ISO"
-          set "_repo=${{ steps.find.outputs.dir }}"
-          set "_auto=1"
-          W10UI.cmd
+    - name: Upload ISO
+      uses: actions/upload-artifact@v4
+      with:
+        name: Windows-ISO
+        path: uup/*.iso
