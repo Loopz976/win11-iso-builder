@@ -1,4 +1,4 @@
-name: LTSC AUTO BUILD (FULL + SPLIT)
+name: LTSC AUTO BUILD (UUP REAL + ESD + SPLIT)
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ jobs:
 
     steps:
 
-    # 🔹 CACHE ISO
+    # 🔹 CACHE ISO BASE
     - name: Cache ISO
       id: cache-iso
       uses: actions/cache@v4
@@ -18,7 +18,7 @@ jobs:
         key: ltsc-iso-v1
 
     # 🔹 DOWNLOAD ISO
-    - name: Baixar partes
+    - name: Baixar ISO
       if: steps.cache-iso.outputs.cache-hit != 'true'
       run: |
         curl -L -o part.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
@@ -26,7 +26,6 @@ jobs:
         curl -L -o part.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
     - name: Instalar 7zip
-      if: steps.cache-iso.outputs.cache-hit != 'true'
       run: choco install 7zip -y
 
     - name: Extrair ISO
@@ -42,18 +41,7 @@ jobs:
         $iso = Get-ChildItem *.iso | Select-Object -First 1
         Rename-Item $iso.Name source.iso
 
-    - name: Limpar partes
-      if: steps.cache-iso.outputs.cache-hit != 'true'
-      shell: powershell
-      run: Remove-Item *.7z* -Force
-
-    # 🔹 VALIDAR
-    - name: Validar ISO
-      shell: powershell
-      run: |
-        if (!(Test-Path "source.iso")) { exit 1 }
-
-    # 🔹 EXTRAIR
+    # 🔹 EXTRAIR ISO
     - name: Criar work
       run: mkdir work
 
@@ -62,16 +50,32 @@ jobs:
       run: |
         & "C:\Program Files\7-Zip\7z.exe" x source.iso -owork -aoa
 
-    - name: Remover ISO
-      shell: powershell
-      run: Remove-Item source.iso -Force
+    # 🔹 BACKUP
+    - name: Backup WIM
+      run: copy work\sources\install.wim work\sources\install_original.wim
 
-    - name: Validar estrutura
+    # ================================
+    # 🔥 DOWNLOAD DOS UPDATES (SEU PRINT)
+    # ================================
+    - name: Criar pasta updates
+      run: mkdir updates
+
+    - name: Baixar CABs
       shell: powershell
       run: |
-        if (!(Test-Path "work\sources\install.wim")) { exit 1 }
+        cd updates
 
+        curl -L -O https://catalog.s.download.windowsupdate.com/.../SSU-19041.7183-x64.cab
+        curl -L -O https://catalog.s.download.windowsupdate.com/.../Windows10.0-KB5003791-x64.cab
+        curl -L -O https://catalog.s.download.windowsupdate.com/.../Windows10.0-KB5007401-x64.cab
+        curl -L -O https://catalog.s.download.windowsupdate.com/.../Windows10.0-KB5008575-x64.cab
+        curl -L -O https://catalog.s.download.windowsupdate.com/.../Windows10.0-KB5007427-x64.cab
+        curl -L -O https://catalog.s.download.windowsupdate.com/.../Windows10.0-KB5082200-x64.cab
+        curl -L -O https://catalog.s.download.windowsupdate.com/.../Windows10.0-KB5082241-x64.cab
+
+    # ================================
     # 🔥 MOUNT
+    # ================================
     - name: Criar mount
       run: mkdir mount
 
@@ -80,43 +84,77 @@ jobs:
       run: |
         dism /Mount-Wim /WimFile:work\sources\install.wim /index:1 /MountDir:mount
 
-    - name: Validar mount
+    # ================================
+    # 🔥 INTEGRAÇÃO CORRETA
+    # ================================
+    - name: Integrar SSU
       shell: powershell
       run: |
-        if (!(Test-Path "mount\Windows")) { exit 1 }
+        dism /Image:mount /Add-Package /PackagePath:updates\SSU-19041.7183-x64.cab
 
-    # 🔥 (AQUI ENTRA W10UI FUTURO)
+    - name: Integrar LCU
+      shell: powershell
+      run: |
+        dism /Image:mount /Add-Package /PackagePath:updates
 
+    # ================================
+    # 🔥 CLEANUP HARD
+    # ================================
+    - name: Cleanup
+      shell: powershell
+      run: |
+        dism /Image:mount /Cleanup-Image /StartComponentCleanup /ResetBase
+
+    # ================================
     # 🔥 UNMOUNT
-    - name: Unmount commit
+    # ================================
+    - name: Commit
       shell: powershell
       run: |
         dism /Unmount-Wim /MountDir:mount /Commit
 
+    # ================================
+    # 🔥 ESD (MAX COMPRESSION)
+    # ================================
+    - name: Converter para ESD
+      shell: powershell
+      run: |
+        dism /Export-Image /SourceImageFile:work\sources\install.wim `
+        /SourceIndex:1 `
+        /DestinationImageFile:work\sources\install.esd `
+        /Compress:recovery
+
+        del work\sources\install.wim
+
+    # ================================
     # 🔥 CRIAR ISO
+    # ================================
     - name: Instalar ADK
       run: choco install windows-adk -y
 
-    - name: Criar ISO final
+    - name: Criar ISO
       shell: powershell
       run: |
         $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
-        & $oscdimg -bwork\boot\etfsboot.com -u2 -h -m -o -lWIN10_LTSC_CUSTOM work final.iso
 
-    # 🔥 SPLIT EM PARTES 1900MB
-    - name: Dividir ISO (1900MB)
+        & $oscdimg -bwork\boot\etfsboot.com -u2 -h -m -o -lLTSC_UUP work final.iso
+
+    # ================================
+    # 🔥 SPLIT 1900MB
+    # ================================
+    - name: Split ISO
       shell: powershell
       run: |
-        & "C:\Program Files\7-Zip\7z.exe" a -t7z split.7z final.iso -v1900m
+        & "C:\Program Files\7-Zip\7z.exe" a split.7z final.iso -v1900m
 
-    # 🔥 LIMPAR ISO GRANDE
-    - name: Remover ISO grande
-      shell: powershell
-      run: Remove-Item final.iso -Force
+    - name: Remover ISO
+      run: del final.iso
 
-    # 📦 UPLOAD PARTES
-    - name: Upload partes
+    # ================================
+    # 📦 UPLOAD
+    # ================================
+    - name: Upload
       uses: actions/upload-artifact@v4
       with:
-        name: Windows-LTSC-SPLIT
+        name: LTSC-FINAL
         path: split.7z.*
