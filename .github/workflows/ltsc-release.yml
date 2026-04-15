@@ -1,0 +1,62 @@
+name: W10 LTSC 2021 Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 180
+
+    steps:
+    - name: Definir variáveis
+      run: |
+        echo "ISO_URL=https://windows.timefa.de/10/ltsc/pt-br_windows_10_enterprise_ltsc_2021_x64_dvd_f318268e.iso" >> $env:GITHUB_ENV
+        echo "ISO_FILE=pt-br_windows_10_enterprise_ltsc_2021_x64_dvd_f318268e.iso" >> $env:GITHUB_ENV
+        echo "ARCHIVE_NAME=W10LTSC2021" >> $env:GITHUB_ENV
+        echo "TAG_NAME=w10-ltsc-2021-${{ github.run_id }}" >> $env:GITHUB_ENV
+
+    - name: Baixar ISO (nome original preservado)
+      run: |
+        curl -L -o $env:ISO_FILE $env:ISO_URL
+
+    - name: Verificar download
+      run: dir
+
+    - name: Instalar 7zip
+      run: choco install 7zip -y
+
+    - name: Compactar ISO (split 1900MB)
+      run: |
+        "C:\Program Files\7-Zip\7z.exe" a -t7z -v1900m -mx=9 $env:ARCHIVE_NAME.7z $env:ISO_FILE
+
+    - name: Gerar hash SHA256
+      run: |
+        certutil -hashfile $env:ISO_FILE SHA256 > hash.txt
+
+    - name: Criar Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.TAG_NAME }}
+        name: W10 LTSC 2021
+        body: |
+          Windows 10 Enterprise LTSC 2021 (21H2)
+
+          • Arquivo original (nome preservado)
+          • Idioma: pt-BR
+          • Arquitetura: x64
+
+          • Compactado em partes (1900MB)
+          • Formato: 7z
+
+          Verificação de integridade:
+          Consulte o arquivo hash.txt
+
+          Extração:
+          Utilize o 7-Zip e extraia o arquivo .001
+
+        files: |
+          W10LTSC2021.7z*
+          hash.txt
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
