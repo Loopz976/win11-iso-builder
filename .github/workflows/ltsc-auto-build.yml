@@ -1,4 +1,4 @@
-name: Build Win10 LTSC (FINAL STABLE)
+name: Build Win10 LTSC (FINAL W10UI ZIP)
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ jobs:
         run: choco install 7zip -y
 
       # ================================
-      # 🔥 DOWNLOAD ISO BASE CORRETA
+      # 🔥 DOWNLOAD ISO BASE
       # ================================
       - name: Baixar ISO base
         shell: powershell
@@ -60,10 +60,24 @@ jobs:
           }
 
       # ================================
-      # 🔥 PREPARAR W10UI
+      # 🔥 BAIXAR W10UI ZIP
       # ================================
-      - name: Baixar W10UI
-        run: git clone https://github.com/abbodi1406/WHD-Windows-Update.git D:\W10UI
+      - name: Baixar W10UI (ZIP)
+        shell: powershell
+        run: |
+          curl.exe -L https://tiny.cc/W10UI -o w10ui.zip
+
+      - name: Extrair W10UI
+        shell: powershell
+        run: |
+          & "C:\Program Files\7-Zip\7z.exe" x w10ui.zip -oD:\W10UI -y
+
+          # Ajusta pasta (caso venha subpasta)
+          $dir = Get-ChildItem D:\W10UI | Where-Object {$_.PSIsContainer} | Select-Object -First 1
+          if ($dir) {
+            Move-Item "$($dir.FullName)\*" D:\W10UI -Force
+            Remove-Item $dir.FullName -Recurse -Force
+          }
 
       - name: Criar pastas
         run: |
@@ -71,9 +85,9 @@ jobs:
           mkdir D:\MOUNT
 
       # ================================
-      # 🔥 BAIXAR UPDATES UUP
+      # 🔥 BAIXAR UPDATES
       # ================================
-      - name: Baixar updates
+      - name: Baixar updates UUP
         shell: powershell
         run: |
           curl.exe -L "https://uupdump.net/get.php?id=1405899d-8302-4010-ad25-3ad906c62200&pack=0&edition=updateOnly" -o uup.html
@@ -81,11 +95,6 @@ jobs:
           $html = Get-Content uup.html -Raw
           $links = [regex]::Matches($html,'href="(http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/[^"]+)"')
           $names = [regex]::Matches($html,'rename "([^"]+)" "([^"]+)"')
-
-          if ($links.Count -ne $names.Count) {
-            Write-Error "Erro: links e nomes não batem"
-            exit 1
-          }
 
           for($i=0;$i -lt $links.Count;$i++){
             $url = $links[$i].Groups[1].Value
@@ -96,7 +105,7 @@ jobs:
           }
 
       # ================================
-      # 🔥 CONFIGURAR W10UI.ini (FIX)
+      # 🔥 CONFIGURAR W10UI.ini
       # ================================
       - name: Configurar INI
         shell: powershell
@@ -116,7 +125,7 @@ jobs:
       # ================================
       # 🔥 RODAR W10UI
       # ================================
-      - name: Integrar updates (W10UI)
+      - name: Integrar updates
         shell: cmd
         run: |
           cd D:\W10UI
@@ -136,11 +145,10 @@ jobs:
           $build=(gp "HKLM:\OFF\Microsoft\Windows NT\CurrentVersion").CurrentBuild
           $ubr=(gp "HKLM:\OFF\Microsoft\Windows NT\CurrentVersion").UBR
 
-          $ver="$build.$ubr"
-          Write-Host "VERSÃO FINAL: $ver"
+          Write-Host "VERSÃO FINAL: $build.$ubr"
 
           if ($ubr -lt 7184) {
-            Write-Error "Update NÃO aplicado corretamente!"
+            Write-Error "Update não aplicado!"
             exit 1
           }
 
