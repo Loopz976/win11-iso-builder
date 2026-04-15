@@ -1,4 +1,4 @@
-name: LTSC AUTO BUILD (FIX DOWNLOAD + UUP + ESD + SPLIT)
+name: LTSC AUTO BUILD (FINAL STABLE)
 
 on:
   workflow_dispatch:
@@ -9,7 +9,9 @@ jobs:
 
     steps:
 
-    # 🔹 CACHE ISO
+    # ================================
+    # 🔹 CACHE ISO BASE
+    # ================================
     - name: Cache ISO
       id: cache-iso
       uses: actions/cache@v4
@@ -18,21 +20,20 @@ jobs:
         key: ltsc-iso-v1
 
     # ================================
-    # 🔥 DOWNLOAD FIX (SEM TRAVAR)
+    # 🔥 DOWNLOAD ISO (RÁPIDO)
     # ================================
-    - name: Baixar ISO partes (FIX)
+    - name: Baixar ISO partes
       if: steps.cache-iso.outputs.cache-hit != 'true'
       shell: powershell
       run: |
-        curl.exe -L "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001" -o part.7z.001
-        curl.exe -L "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002" -o part.7z.002
-        curl.exe -L "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003" -o part.7z.003
+        curl.exe -L -o part.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
+        curl.exe -L -o part.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
+        curl.exe -L -o part.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
-    # 🔹 7ZIP
     - name: Instalar 7zip
       run: choco install 7zip -y
 
-    - name: Extrair ISO
+    - name: Extrair ISO base
       if: steps.cache-iso.outputs.cache-hit != 'true'
       shell: powershell
       run: |
@@ -45,7 +46,9 @@ jobs:
         $iso = Get-ChildItem *.iso | Select-Object -First 1
         Rename-Item $iso.Name source.iso
 
-    # 🔹 EXTRAIR ISO
+    # ================================
+    # 🔥 EXTRAIR ISO
+    # ================================
     - name: Criar work
       run: mkdir work
 
@@ -54,21 +57,34 @@ jobs:
       run: |
         & "C:\Program Files\7-Zip\7z.exe" x source.iso -owork -aoa
 
-    # 🔹 BACKUP
-    - name: Backup WIM
+    - name: Remover ISO pra liberar espaço
+      run: del source.iso
+
+    # ================================
+    # 🔥 BACKUP WIM
+    # ================================
+    - name: Backup original
       run: copy work\sources\install.wim work\sources\install_original.wim
 
     # ================================
-    # 🔥 UUP AUTOMÁTICO
+    # 🔥 DOWNLOAD UPDATES (CAB REAL)
     # ================================
-    - name: Clonar UUP
-      run: git clone https://github.com/uup-dump/uup-dump.git uup
+    - name: Criar pasta updates
+      run: mkdir updates
 
     - name: Baixar updates
       shell: powershell
       run: |
-        cd uup
-        cmd /c uup_download_windows.cmd
+        cd updates
+
+        # ⚠️ COLOQUE LINKS REAIS AQUI
+        curl.exe -L -o SSU.cab LINK1
+        curl.exe -L -o KB1.cab LINK2
+        curl.exe -L -o KB2.cab LINK3
+        curl.exe -L -o KB3.cab LINK4
+        curl.exe -L -o KB4.cab LINK5
+        curl.exe -L -o KB5.cab LINK6
+        curl.exe -L -o KB6.cab LINK7
 
     # ================================
     # 🔥 MOUNT
@@ -76,31 +92,50 @@ jobs:
     - name: Criar mount
       run: mkdir mount
 
-    - name: Montar WIM
+    - name: Montar imagem
       shell: powershell
       run: |
         dism /Mount-Wim /WimFile:work\sources\install.wim /index:1 /MountDir:mount
 
-    # 🔥 INTEGRAR
-    - name: Integrar updates
+    # ================================
+    # 🔥 INTEGRAR (SSU PRIMEIRO)
+    # ================================
+    - name: Integrar SSU
       shell: powershell
       run: |
-        dism /Image:mount /Add-Package /PackagePath:uup
+        dism /Image:mount /Add-Package /PackagePath:updates\SSU.cab
 
-    # 🔥 CLEAN
+    - name: Integrar restantes
+      shell: powershell
+      run: |
+        dism /Image:mount /Add-Package /PackagePath:updates
+
+    # ================================
+    # 🔥 CLEAN HARD
+    # ================================
     - name: Cleanup
       shell: powershell
       run: |
         dism /Image:mount /Cleanup-Image /StartComponentCleanup /ResetBase
 
+    # ================================
     # 🔥 UNMOUNT
+    # ================================
     - name: Commit
       shell: powershell
       run: |
         dism /Unmount-Wim /MountDir:mount /Commit
 
-    # 🔥 ESD
-    - name: Converter ESD
+    # ================================
+    # 🔥 REMOVER TEMP PESADO
+    # ================================
+    - name: Limpar updates
+      run: rmdir /s /q updates
+
+    # ================================
+    # 🔥 CONVERTER ESD
+    # ================================
+    - name: Converter para ESD
       shell: powershell
       run: |
         dism /Export-Image /SourceImageFile:work\sources\install.wim `
@@ -110,7 +145,9 @@ jobs:
 
         del work\sources\install.wim
 
-    # 🔥 ISO
+    # ================================
+    # 🔥 CRIAR ISO
+    # ================================
     - name: Instalar ADK
       run: choco install windows-adk -y
 
@@ -118,10 +155,17 @@ jobs:
       shell: powershell
       run: |
         $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
-
         & $oscdimg -bwork\boot\etfsboot.com -u2 -h -m -o -lLTSC_FINAL work final.iso
 
-    # 🔥 SPLIT
+    # ================================
+    # 🔥 LIMPAR WORK (ANTES DO SPLIT)
+    # ================================
+    - name: Limpar work
+      run: rmdir /s /q work
+
+    # ================================
+    # 🔥 SPLIT 1900MB
+    # ================================
     - name: Split ISO
       shell: powershell
       run: |
@@ -130,8 +174,10 @@ jobs:
     - name: Remover ISO
       run: del final.iso
 
-    # 📦 UPLOAD
-    - name: Upload
+    # ================================
+    # 📦 UPLOAD FINAL
+    # ================================
+    - name: Upload partes
       uses: actions/upload-artifact@v4
       with:
         name: LTSC-FINAL
