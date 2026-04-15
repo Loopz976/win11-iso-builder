@@ -1,4 +1,4 @@
-name: BUILD ISO LTSC FINAL (FINAL DEFINITIVE)
+name: BUILD ISO LTSC FINAL (FINAL STABLE)
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path work | Out-Null
 
       # ISO DOWNLOAD
-      - name: Baixar ISO
+      - name: Baixar ISO (3 partes)
         shell: powershell
         run: |
           Set-Location work
@@ -61,7 +61,7 @@ jobs:
         run: |
           Remove-Item work\W10UI.zip -Force
 
-      # DRIVER
+      # DRIVER NVIDIA
       - name: Baixar driver NVIDIA
         shell: powershell
         run: |
@@ -86,41 +86,33 @@ jobs:
           Remove-Item work\nvidia -Recurse -Force
           Remove-Item work\nvidia.exe -Force
 
-      # 🔥 MONTAR ISO (CHAVE)
-      - name: Montar ISO
-        shell: powershell
-        run: |
-          $iso = (Get-ChildItem C:\Files\*.iso | Select-Object -First 1).FullName
-          $mount = Mount-DiskImage -ImagePath $iso -PassThru
-          $drive = ($mount | Get-Volume).DriveLetter
-          echo "DRIVE=$drive" >> $env:GITHUB_ENV
-
-      # DEBUG
-      - name: Verificar estrutura
-        shell: powershell
-        run: |
-          Write-Host "FILES:"
-          Get-ChildItem C:\Files
-          Write-Host "DRIVE:"
-          echo $env:DRIVE
-
-      # 🚀 EXECUÇÃO FINAL (100% AUTOMÁTICA)
-      - name: Executar W10UI automático
+      # 🚀 MONTAR ISO + EXECUTAR (FIX FINAL)
+      - name: Montar ISO e rodar W10UI
         shell: powershell
         run: |
           Set-Location C:\Files
-          $d = $env:DRIVE
 
-          $input = @"
-1
-$d:\
-0
-"@
+          # pegar ISO
+          $iso = (Get-ChildItem *.iso | Select-Object -First 1).FullName
 
-          $input | cmd /c W10UI.cmd
+          # montar ISO
+          $mount = Mount-DiskImage -ImagePath $iso -PassThru
+          $drive = ($mount | Get-Volume).DriveLetter
+
+          Write-Host "Drive detectado: $drive"
+
+          # criar input estável
+          $inputFile = "input.txt"
+
+          "1" | Out-File $inputFile -Encoding ASCII
+          "$drive:\" | Add-Content $inputFile
+          "0" | Add-Content $inputFile
+
+          # executar W10UI
+          Get-Content $inputFile | cmd /c W10UI.cmd
 
       # OUTPUT
-      - name: Organizar ISO
+      - name: Organizar ISO final
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path output | Out-Null
