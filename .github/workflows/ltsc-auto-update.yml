@@ -1,4 +1,4 @@
-name: BLOCO 2 - ISO Extract (Padrão Correto)
+name: BLOCO 2 - ISO Mount (COM CACHE)
 
 on:
   workflow_dispatch:
@@ -8,71 +8,76 @@ jobs:
     runs-on: windows-2022
 
     steps:
-    # 🔹 BAIXAR PARTES
+    # 🔎 VERIFICAR SE ISO JÁ EXISTE
+    - name: Checar ISO existente
+      id: check_iso
+      shell: powershell
+      run: |
+        if (Test-Path "source.iso") {
+          echo "found=true" >> $env:GITHUB_OUTPUT
+        } else {
+          echo "found=false" >> $env:GITHUB_OUTPUT
+        }
+
+    # 📥 BAIXAR SÓ SE NÃO EXISTIR
     - name: Baixar partes
+      if: steps.check_iso.outputs.found == 'false'
       run: |
         curl -L -o W10LTSC2021.7z.001 "https://github.com/Loopz976/win11-iso-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001"
         curl -L -o W10LTSC2021.7z.002 "https://github.com/Loopz976/win11-iso-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002"
         curl -L -o W10LTSC2021.7z.003 "https://github.com/Loopz976/win11-iso-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003"
 
-    # 🔹 7ZIP
     - name: Instalar 7zip
+      if: steps.check_iso.outputs.found == 'false'
       run: choco install 7zip -y
 
-    # 🔹 EXTRAIR ISO
+    # 📦 EXTRAIR ISO (SÓ SE NECESSÁRIO)
     - name: Extrair ISO
+      if: steps.check_iso.outputs.found == 'false'
       shell: powershell
       run: |
         & "C:\Program Files\7-Zip\7z.exe" x W10LTSC2021.7z.001 -aoa
+        $iso = Get-ChildItem *.iso | Select-Object -First 1
+        Rename-Item $iso.Name "source.iso"
 
-    # 🔹 LIMPAR PARTES
+    # 🧹 LIMPAR PARTES
     - name: Limpar partes
+      if: steps.check_iso.outputs.found == 'false'
       shell: powershell
       run: |
         Remove-Item W10LTSC2021.7z.* -Force -ErrorAction SilentlyContinue
 
-    # 🔹 CRIAR WORKDIR
+    # =========================
+    # 🔥 BLOCO 2 REAL
+    # =========================
+
     - name: Criar pasta
       run: mkdir work
 
-    # 🔹 MONTAR + COPIAR (FORMA SEGURA)
-    - name: Extrair ISO corretamente
+    - name: Montar e copiar
       shell: powershell
       run: |
-        $iso = Get-ChildItem *.iso | Select-Object -First 1
-
-        if (-not $iso) {
+        if (-not (Test-Path "source.iso")) {
           Write-Error "ISO não encontrada"
           exit 1
         }
 
-        Write-Host "Montando:" $iso.Name
-
-        Mount-DiskImage -ImagePath $iso.FullName
-
+        Mount-DiskImage -ImagePath "source.iso"
         Start-Sleep -Seconds 3
 
-        $drive = (Get-DiskImage $iso.FullName | Get-Volume).DriveLetter
+        $drive = (Get-DiskImage "source.iso" | Get-Volume).DriveLetter
 
-        if (-not $drive) {
-          Write-Error "Falha ao montar ISO"
+        robocopy "$drive`:\" work /E
+        $rc = $LASTEXITCODE
+
+        Dismount-DiskImage -ImagePath "source.iso"
+
+        if ($rc -lt 8) {
+          Write-Host "Robocopy OK"
+        } else {
           exit 1
         }
 
-        Write-Host "Copiando arquivos..."
-
-        robocopy "$drive`:\" work /E /R:3 /W:5
-
-        Dismount-DiskImage -ImagePath $iso.FullName
-
-    # 🔹 REMOVER ISO (LIBERAR ESPAÇO)
-    - name: Remover ISO
-      shell: powershell
-      run: |
-        Remove-Item *.iso -Force -ErrorAction SilentlyContinue
-
     # 🔍 VALIDAR
-    - name: Validar estrutura
-      run: |
-        dir work
-        dir work\sources
+    - name: Validar
+      run: dir work
