@@ -1,4 +1,4 @@
-name: TESTE W10UI AUTO PATH
+name: TESTE W10UI FIX FINAL
 
 on:
   workflow_dispatch:
@@ -23,12 +23,11 @@ jobs:
           curl.exe -L -o w10ui.zip https://codeload.github.com/abbodi1406/WHD/zip/refs/heads/master
           & "C:\Program Files\7-Zip\7z.exe" x w10ui.zip -oC:\ -y
 
-      # 🔥 ENCONTRAR O W10UI.cmd AUTOMATICO
-      - name: Encontrar W10UI
+      - name: Encontrar W10UI (FIX PERMISSÃO)
         id: find
         shell: powershell
         run: |
-          $cmd = Get-ChildItem C:\ -Recurse -Filter W10UI.cmd | Select -First 1
+          $cmd = Get-ChildItem C:\WHD-master -Recurse -Filter W10UI.cmd | Select -First 1
           if (!$cmd) { throw "W10UI.cmd não encontrado" }
 
           $dir = $cmd.DirectoryName
@@ -40,7 +39,7 @@ jobs:
         shell: cmd
         working-directory: ${{ steps.find.outputs.dir }}
         run: |
-          set "target=C:\ISO"
-          set "repo=${{ steps.find.outputs.dir }}"
-          set "autostart=1"
+          set "_work=C:\ISO"
+          set "_repo=${{ steps.find.outputs.dir }}"
+          set "_auto=1"
           W10UI.cmd
