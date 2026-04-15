@@ -1,44 +1,42 @@
-name: TESTE PIPELINE
+name: TESTE ISO PARTES
 
 on:
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   test:
     runs-on: windows-2022
 
     steps:
-    - name: Teste variáveis
-      run: echo OK
-
-    # 🔽 TESTAR DOWNLOAD DAS PARTES
-    - name: Baixar partes
+    # 📥 BAIXAR TODAS AS PARTES
+    - name: Baixar partes da ISO
       run: |
-        curl -L -o part1.7z.001 "https://github.com/Loopz976/win11-iso-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001"
+        curl -L -o W10LTSC2021.7z.001 "https://github.com/Loopz976/win11-iso-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001"
+        curl -L -o W10LTSC2021.7z.002 "https://github.com/Loopz976/win11-iso-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002"
+        curl -L -o W10LTSC2021.7z.003 "https://github.com/Loopz976/win11-iso-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003"
 
-    # 📦 TESTAR EXTRAÇÃO
+    # 📦 INSTALAR 7ZIP
     - name: Instalar 7zip
       run: choco install 7zip -y
 
-    - name: Testar extração
+    # 📂 EXTRAIR ISO
+    - name: Extrair ISO
       shell: powershell
       run: |
-        & "C:\Program Files\7-Zip\7z.exe" x part1.7z.001 -aoa
+        & "C:\Program Files\7-Zip\7z.exe" x W10LTSC2021.7z.001 -aoa
 
-    # 🔽 TESTAR UUP DOWNLOAD
-    - name: Baixar UUP
-      run: |
-        curl -L -o uup.zip "https://uupdump.net/get.php?id=19044&pack=pt-br&edition=enterprise&aria2=2"
+    # 🔍 VERIFICAR RESULTADO
+    - name: Listar arquivos
+      run: dir
 
-    - name: Extrair UUP
+    # 🧠 VALIDAR ISO
+    - name: Validar ISO
+      shell: powershell
       run: |
-        powershell Expand-Archive uup.zip -DestinationPath uup
-
-    - name: Testar script UUP
-      shell: cmd
-      run: |
-        cd uup
-        echo TESTE OK
+        $iso = Get-ChildItem *.iso | Select-Object -First 1
+        if ($iso) {
+          Write-Host "ISO encontrada:" $iso.Name
+        } else {
+          Write-Error "ISO NÃO encontrada!"
+          exit 1
+        }
