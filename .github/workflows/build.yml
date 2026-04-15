@@ -1,7 +1,9 @@
-name: Build Windows 11 ISO
+name: Build Windows 11 Pro ISO
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 3 1 * *'
 
 jobs:
   build:
@@ -10,16 +12,40 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Rodar scripts
-        shell: powershell
+      - name: Preparar pastas
         run: |
-          ./scripts/download_iso.ps1
-          ./scripts/download_updates.ps1
-          ./scripts/driver_nvidia.ps1
-          ./scripts/integrate.ps1
-          ./scripts/build_iso.ps1
+          mkdir C:\iso
+          mkdir C:\mount
+          mkdir C:\updates
+          mkdir C:\drivers\nvidia
 
-      - name: Upload ISO
-        uses: softprops/action-gh-release@v1
-        with:
-          files: C:\final.iso
+      - name: Baixar ISO oficial
+        run: |
+          Invoke-WebRequest -Uri "https://software-download.microsoft.com/Win11_23H2_BrazilianPortuguese_x64.iso" -OutFile C:\win.iso
+
+      - name: Montar ISO
+        run: Mount-DiskImage -ImagePath C:\win.iso
+
+      - name: Copiar arquivos
+        run: robocopy D:\ C:\iso /E
+
+      - name: Exportar apenas PRO
+        run: |
+          dism /Export-Image /SourceImageFile:C:\iso\sources\install.wim /SourceIndex:4 /DestinationImageFile:C:\iso\sources\install.wim
+
+      - name: Montar imagem
+        run: |
+          dism /Mount-Wim /WimFile:C:\iso\sources\install.wim /index:1 /MountDir:C:\mount
+
+      - name: Baixar driver NVIDIA
+        run: |
+          Invoke-WebRequest -Uri "https://us.download.nvidia.com/Windows/342.01/342.01-desktop-win10-64bit-international.exe" -OutFile C:\nvidia.exe
+
+      - name: Extrair driver NVIDIA
+        run: |
+          Start-Process -FilePath C:\nvidia.exe -ArgumentList "-s -extract C:\drivers\nvidia" -Wait
+
+      - name: Integrar driver NVIDIA (com fallback)
+        run: |
+          try {
+            dism /
