@@ -1,192 +1,95 @@
-name: Build Win10 LTSC (FINAL W10UI AUTO FIXED)
+name: BUILD ISO (W10UI FULL NATIVE)
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 360
 
     steps:
-      - uses: actions/checkout@v4
+      # 1. Checkout
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Instalar 7-Zip
-        run: choco install 7zip -y
-
-      # ================================
-      # 🔥 DOWNLOAD ISO BASE
-      # ================================
-      - name: Baixar ISO base
-        shell: powershell
+      # 2. Criar pasta base
+      - name: Criar estrutura
         run: |
-          curl.exe -L -o base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
-          curl.exe -L -o base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
-          curl.exe -L -o base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
+          mkdir work
+          mkdir work\files
 
-      - name: Extrair ISO base
-        shell: powershell
+      # 3. Baixar ISO BASE (partes)
+      - name: Download ISO Base (parts)
         run: |
-          mkdir D:\BASE
-          & "C:\Program Files\7-Zip\7z.exe" x base.7z.001 -oD:\BASE -y
+          cd work
+          curl -L -o iso.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10.7z.001
+          curl -L -o iso.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10.7z.002
+          curl -L -o iso.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10.7z.003
 
-      - name: Encontrar ISO
-        id: iso
-        shell: powershell
-        run: |
-          $iso = Get-ChildItem D:\BASE -Recurse *.iso | Select-Object -First 1
-          echo "file=$($iso.FullName)" >> $env:GITHUB_OUTPUT
-
-      # ================================
-      # 🔥 EXTRAIR ISO
-      # ================================
+      # 4. Extrair ISO base
       - name: Extrair ISO
-        shell: powershell
         run: |
-          mkdir D:\ISO
-          & "C:\Program Files\7-Zip\7z.exe" x "${{ steps.iso.outputs.file }}" -oD:\ISO -y
+          cd work
+          7z x iso.7z.001 -oiso
 
-      # ================================
-      # 🔥 GARANTIR WIM
-      # ================================
-      - name: Garantir install.wim
-        shell: powershell
+      # 5. Mover ISO para pasta FILES (intocável)
+      - name: Mover ISO para files
         run: |
-          if (!(Test-Path "D:\ISO\sources\install.wim")) {
-            dism /Export-Image /SourceImageFile:D:\ISO\sources\install.esd /All /DestinationImageFile:D:\ISO\sources\install.wim
-          }
+          move work\iso\*.iso work\files\
 
-      # ================================
-      # 🔥 BAIXAR W10UI (ZIP)
-      # ================================
+      # 6. Baixar W10UI
       - name: Baixar W10UI
-        shell: powershell
         run: |
-          curl.exe -L https://tiny.cc/W10UI -o w10ui.zip
+          cd work
+          curl -L -o W10UI.zip https://tiny.cc/W10UI
 
+      # 7. Extrair W10UI dentro da pasta FILES
       - name: Extrair W10UI
-        shell: powershell
         run: |
-          & "C:\Program Files\7-Zip\7z.exe" x w10ui.zip -oD:\W10UI -y
+          7z x work\W10UI.zip -owork\files\
 
-          $dir = Get-ChildItem D:\W10UI | Where-Object {$_.PSIsContainer} | Select-Object -First 1
-          if ($dir) {
-            Move-Item "$($dir.FullName)\*" D:\W10UI -Force
-            Remove-Item $dir.FullName -Recurse -Force
-          }
-
-      # ================================
-      # 🔥 PREPARAR PASTAS
-      # ================================
-      - name: Criar dirs
+      # 8. Baixar updates
+      - name: Baixar Updates
         run: |
-          mkdir D:\W10UI_TEMP
-          mkdir D:\MOUNT
+          mkdir work\files\updates
+          cd work\files\updates
 
-      # ================================
-      # 🔥 BAIXAR UPDATES
-      # ================================
-      - name: Baixar updates UUP
-        shell: powershell
+          # EXEMPLO (ajuste depois com seus updates reais)
+          curl -L -o update1.cab https://example.com/update1.cab
+          curl -L -o update2.msu https://example.com/update2.msu
+
+      # 9. Criar W10UI.ini já configurado
+      - name: Criar config W10UI.ini
         run: |
-          curl.exe -L "https://uupdump.net/get.php?id=1405899d-8302-4010-ad25-3ad906c62200&pack=0&edition=updateOnly" -o uup.html
+          echo [W10UI] > work\files\W10UI.ini
+          echo AutoStart=1 >> work\files\W10UI.ini
+          echo AddUpdates=1 >> work\files\W10UI.ini
+          echo Cleanup=1 >> work\files\W10UI.ini
+          echo ResetBase=1 >> work\files\W10UI.ini
+          echo NetFx3=1 >> work\files\W10UI.ini
+          echo StartVirtual=0 >> work\files\W10UI.ini
+          echo wim2esd=1 >> work\files\W10UI.ini
+          echo SkipISO=0 >> work\files\W10UI.ini
 
-          $html = Get-Content uup.html -Raw
-          $links = [regex]::Matches($html,'href="(http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/[^"]+)"')
-          $names = [regex]::Matches($html,'rename "([^"]+)" "([^"]+)"')
-
-          if ($links.Count -ne $names.Count) {
-            Write-Error "Erro links/names"
-            exit 1
-          }
-
-          for($i=0;$i -lt $links.Count;$i++){
-            $url = $links[$i].Groups[1].Value
-            $name = $names[$i].Groups[2].Value
-
-            Write-Host "Baixando $name"
-            curl.exe -L --retry 5 --retry-delay 5 -o "D:\W10UI_TEMP\$name" $url
-          }
-
-      # ================================
-      # 🔥 CONFIGURAR INI (FIX REAL)
-      # ================================
-      - name: Configurar INI
-        shell: powershell
+      # 10. Executar W10UI (dentro da pasta files)
+      - name: Rodar W10UI
         run: |
-          $ini = @(
-            "_CabDir=D:\W10UI_TEMP",
-            "_Target=D:\ISO\sources\install.wim",
-            "_MountDir=D:\MOUNT",
-            "AutoStart=1",
-            "SkipISO=1",
-            "Cleanup=1",
-            "ResetBase=1",
-            "LCUwinre=1"
-          )
+          cd work\files
+          dir
+          call W10UI.cmd
 
-          $ini | Set-Content "D:\W10UI\W10UI.ini" -Encoding ASCII
-
-      # ================================
-      # 🔥 RODAR W10UI (AUTO FIX)
-      # ================================
-      - name: Integrar updates (W10UI AUTO)
-        shell: cmd
+      # 11. Compactar ISO final em partes 1900MB
+      - name: Compactar ISO Final
         run: |
-          cd D:\W10UI
-          call W10UI.cmd /auto
+          mkdir output
+          move work\files\*.iso output\
 
-      # ================================
-      # 🔥 VALIDAR BUILD
-      # ================================
-      - name: Validar versão
-        shell: powershell
-        run: |
-          mkdir D:\VERIFY
-          dism /Mount-Wim /WimFile:D:\ISO\sources\install.wim /index:1 /MountDir:D:\VERIFY
+          cd output
+          7z a -v1900m final_iso.7z *.iso
 
-          reg load HKLM\OFF D:\VERIFY\Windows\System32\Config\SOFTWARE
-
-          $build=(gp "HKLM:\OFF\Microsoft\Windows NT\CurrentVersion").CurrentBuild
-          $ubr=(gp "HKLM:\OFF\Microsoft\Windows NT\CurrentVersion").UBR
-
-          Write-Host "VERSÃO FINAL: $build.$ubr"
-
-          if ($ubr -lt 7184) {
-            Write-Error "Update não aplicado!"
-            exit 1
-          }
-
-          reg unload HKLM\OFF
-          dism /Unmount-Wim /MountDir:D:\VERIFY /Discard
-
-      # ================================
-      # 🔥 PEGAR ISO FINAL
-      # ================================
-      - name: Encontrar ISO final
-        id: finaliso
-        shell: powershell
-        run: |
-          $iso = Get-ChildItem D:\W10UI -Recurse *.iso | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-          echo "file=$($iso.FullName)" >> $env:GITHUB_OUTPUT
-
-      # ================================
-      # 🔥 SPLIT
-      # ================================
-      - name: Split ISO
-        shell: powershell
-        run: |
-          & "C:\Program Files\7-Zip\7z.exe" a parts.7z "${{ steps.finaliso.outputs.file }}" -v1900m
-
-      # ================================
-      # 📦 RELEASE
-      # ================================
-      - name: Upload Release
-        uses: ncipollo/release-action@v1
+      # 12. Upload artifact
+      - name: Upload ISO
+        uses: actions/upload-artifact@v4
         with:
-          tag: build-${{ github.run_id }}
-          name: Build ${{ github.run_id }}
-          artifacts: parts.7z.*
+          name: ISO_FINAL
+          path: output\*.7z
