@@ -1,9 +1,7 @@
-name: Build Windows 11 Pro ISO
+name: Build Windows 11 23H2 ISO (IoT/Enterprise Auto)
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 3 1 * *'
 
 jobs:
   build:
@@ -12,31 +10,53 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Preparar pastas
+      # 📁 Preparar ambiente
+      - name: Preparar ambiente
         run: |
           mkdir C:\iso
           mkdir C:\mount
-          mkdir C:\updates
           mkdir C:\drivers\nvidia
 
-      - name: Baixar ISO oficial
+      # 📥 Baixar ISO base (apenas boot)
+      - name: Baixar ISO base
         run: |
-          Invoke-WebRequest -Uri "https://software-download.microsoft.com/Win11_23H2_BrazilianPortuguese_x64.iso" -OutFile C:\win.iso
+          Invoke-WebRequest -Uri "https://software-download.microsoft.com/Win11_23H2_BrazilianPortuguese_x64.iso" -OutFile C:\base.iso
 
-      - name: Montar ISO
-        run: Mount-DiskImage -ImagePath C:\win.iso
+      - name: Montar ISO base
+        run: Mount-DiskImage -ImagePath C:\base.iso
 
-      - name: Copiar arquivos
+      - name: Copiar base ISO
         run: robocopy D:\ C:\iso /E
 
-      - name: Exportar apenas PRO
+      # 📥 Baixar ESD oficial
+      - name: Baixar ESD 23H2
         run: |
-          dism /Export-Image /SourceImageFile:C:\iso\sources\install.wim /SourceIndex:4 /DestinationImageFile:C:\iso\sources\install.wim
+          Invoke-WebRequest -Uri "http://dl.delivery.mp.microsoft.com/filestreamingservice/files/ace9af3d-e652-4ff0-ab99-801b3ff36711/22631.2861.231204-0538.23H2_NI_RELEASE_SVC_REFRESH_CLIENTBUSINESS_VOL_x64FRE_pt-br.esd" -OutFile C:\install.esd
 
-      - name: Montar imagem
+      # 🔍 Detectar índice automaticamente
+      - name: Detectar índice IoT/Enterprise
+        shell: powershell
         run: |
-          dism /Mount-Wim /WimFile:C:\iso\sources\install.wim /index:1 /MountDir:C:\mount
+          $info = dism /Get-WimInfo /WimFile:C:\install.esd
 
+          $iot = ($info | Select-String "IoT Enterprise")
+          if ($iot) {
+            $index = ($iot -split ":")[0] -replace "[^0-9]"
+            Write-Output "IoT encontrado no index $index"
+          } else {
+            Write-Output "IoT não encontrado, usando Enterprise"
+            $ent = ($info | Select-String "Enterprise" | Select-Object -First 1)
+            $index = ($ent -split ":")[0] -replace "[^0-9]"
+          }
+
+          echo "INDEX=$index" >> $env:GITHUB_ENV
+
+      # 🔄 Converter ESD → WIM
+      - name: Converter ESD
+        run: |
+          dism /Export-Image /SourceImageFile:C:\install.esd /SourceIndex:$env:INDEX /DestinationImageFile:C:\iso\sources\install.wim /Compress:max
+
+      # 🎮 Driver NVIDIA
       - name: Baixar driver NVIDIA
         run: |
           Invoke-WebRequest -Uri "https://us.download.nvidia.com/Windows/342.01/342.01-desktop-win10-64bit-international.exe" -OutFile C:\nvidia.exe
@@ -45,7 +65,52 @@ jobs:
         run: |
           Start-Process -FilePath C:\nvidia.exe -ArgumentList "-s -extract C:\drivers\nvidia" -Wait
 
-      - name: Integrar driver NVIDIA (com fallback)
+      # 🧩 Montar imagem
+      - name: Montar imagem
+        run: |
+          dism /Mount-Wim /WimFile:C:\iso\sources\install.wim /index:1 /MountDir:C:\mount
+
+      # 🎮 Integrar driver
+      - name: Integrar driver NVIDIA
         run: |
           try {
-            dism /
+            dism /Image:C:\mount /Add-Driver /Driver:C:\drivers\nvidia\Display.Driver /Recurse
+          } catch {
+            Write-Output "Driver incompatível - ignorando"
+          }
+
+      # 🧹 Limpeza pesada
+      - name: Limpeza total
+        run: |
+          dism /Image:C:\mount /Cleanup-Image /StartComponentCleanup /ResetBase
+
+      # 💾 Salvar imagem
+      - name: Desmontar imagem
+        run: |
+          dism /Unmount-Wim /MountDir:C:\mount /Commit
+
+      # 📦 Converter final para ESD
+      - name: Converter para ESD final
+        run: |
+          dism /Export-Image /SourceImageFile:C:\iso\sources\install.wim /SourceIndex:1 /DestinationImageFile:C:\iso\sources\install.esd /Compress:recovery
+
+      - name: Remover WIM
+        run: del C:\iso\sources\install.wim
+
+      # 🔧 Instalar ADK
+      - name: Instalar Windows ADK
+        run: |
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2196224" -OutFile adksetup.exe
+          Start-Process adksetup.exe -ArgumentList "/quiet /norestart /features OptionId.DeploymentTools" -Wait
+
+      # 💿 Criar ISO final
+      - name: Criar ISO
+        run: |
+          $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
+          & $oscdimg -bC:\iso\boot\etfsboot.com -u2 -h -m -lWIN11_23H2_CUSTOM C:\iso C:\final.iso
+
+      # 📤 Upload Release
+      - name: Upload Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: C:\final.iso
