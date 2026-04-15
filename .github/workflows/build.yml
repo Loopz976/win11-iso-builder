@@ -22,7 +22,7 @@ jobs:
           curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003" -o C:\work\files.zip.003
           curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004" -o C:\work\files.zip.004
 
-      # 📦 Extrair pacote (todas partes)
+      # 📦 Extrair pacote (auto junta)
       - name: Extrair pacote
         shell: powershell
         run: |
@@ -35,20 +35,22 @@ jobs:
           $iso = Get-ChildItem -Path C:\work\extract\Files -Recurse -Filter "Win11*.iso" | Select-Object -First 1
 
           if (-not $iso) {
+            Write-Host "Conteúdo encontrado:"
             Get-ChildItem -Recurse C:\work\extract
             throw "ISO não encontrada"
           }
 
           Copy-Item $iso.FullName C:\work\base.iso
+          Write-Host "ISO encontrada:" $iso.FullName
 
-      # 📦 Extrair ISO COMPLETA (sem montar)
+      # 📦 Extrair ISO (SEM montar)
       - name: Extrair ISO
         shell: powershell
         run: |
           & "C:\Program Files\7-Zip\7z.exe" x C:\work\base.iso -oC:\iso -y
 
-      # 🔍 Detectar imagem
-      - name: Detectar install.wim ou esd
+      # 🔍 Detectar install.wim ou install.esd
+      - name: Detectar imagem
         shell: powershell
         run: |
           if (Test-Path "C:\iso\sources\install.wim") {
@@ -56,10 +58,10 @@ jobs:
           } elseif (Test-Path "C:\iso\sources\install.esd") {
             echo "IMG=C:\iso\sources\install.esd" >> $env:GITHUB_ENV
           } else {
-            throw "Imagem não encontrada"
+            throw "install.wim/esd não encontrado"
           }
 
-      # 🔄 Exportar index 4 (PRO)
+      # 🔄 Exportar apenas PRO (index 4)
       - name: Exportar PRO
         run: |
           dism /Export-Image /SourceImageFile:$env:IMG /SourceIndex:4 /DestinationImageFile:C:\iso\sources\install_new.wim /Compress:max
@@ -76,21 +78,34 @@ jobs:
       - name: Instalar ADK
         run: |
           Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2196224" -OutFile C:\work\adk.exe
-          Start-Process C:\work\adk.exe -ArgumentList "/quiet /norestart /features OptionId.DeploymentTools" -Wait
+          Start-Process C:\work\adk.exe -ArgumentList "/quiet /norestart /features OptionId.DeploymentTools OptionId.ImagingAndConfigurationDesigner" -Wait
 
-      # 💿 Criar ISO FINAL
+      # 💿 Criar ISO FINAL (auto detecta oscdimg)
       - name: Criar ISO FINAL
+        shell: powershell
         run: |
-          $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
-          & $oscdimg -bC:\iso\boot\etfsboot.com -u2 -h -m -lWIN11_23H2_PRO_FINAL C:\iso C:\work\Win11_23H2_Pro_Final.iso
+          $oscdimg = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe | Select-Object -First 1
 
-      # 📦 Compactar ISO em partes
+          if (-not $oscdimg) {
+            throw "oscdimg.exe não encontrado"
+          }
+
+          Write-Host "Oscdimg:" $oscdimg.FullName
+
+          & $oscdimg.FullName `
+            -bC:\iso\boot\etfsboot.com `
+            -u2 -h -m `
+            -lWIN11_23H2_PRO_FINAL `
+            C:\iso `
+            C:\work\Win11_23H2_Pro_Final.iso
+
+      # 📦 Compactar ISO
       - name: Compactar ISO
         shell: powershell
         run: |
           & "C:\Program Files\7-Zip\7z.exe" a -tzip C:\work\Win11_23H2_Pro_Final.zip C:\work\Win11_23H2_Pro_Final.iso -v1900m
 
-      # 📤 Upload
+      # 📤 Upload Release
       - name: Upload Release
         uses: softprops/action-gh-release@v1
         with:
@@ -101,5 +116,5 @@ jobs:
 
             - Edition: Professional (Index 4)
             - Clean base
-            - Ready for customization
+            - Split 1900MB
           files: C:\work\Win11_23H2_Pro_Final.zip.*
