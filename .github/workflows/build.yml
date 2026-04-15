@@ -1,4 +1,4 @@
-name: TESTE W10UI TARGET
+name: TESTE W10UI FIX
 
 on:
   workflow_dispatch:
@@ -8,26 +8,26 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Preparar fake ISO
+      - name: Criar ISO fake
         shell: powershell
         run: |
-          mkdir C:\ISO\sources -Force
+          New-Item -ItemType Directory -Path C:\ISO\sources -Force
           New-Item C:\ISO\sources\install.wim -ItemType File
 
-      - name: Baixar W10UI
+      - name: Baixar W10UI (FIX REAL)
         shell: powershell
         run: |
-          curl.exe -L -o w10ui.zip https://github.com/abbodi1406/WHD/raw/master/W10UI.zip
-          Expand-Archive w10ui.zip -DestinationPath C:\w10ui
+          curl.exe -L -o w10ui.zip https://codeload.github.com/abbodi1406/WHD/zip/refs/heads/master
 
-      # 🔥 FORÇA VIA VARIÁVEL (SEGREDO AQUI)
+          Expand-Archive w10ui.zip -DestinationPath C:\
+
+          Rename-Item "C:\WHD-master" "C:\w10ui"
+
       - name: Rodar W10UI FORÇADO
         shell: cmd
-        working-directory: C:\w10ui
+        working-directory: C:\w10ui\W10UI
         run: |
           set "target=C:\ISO"
-          set "repo=C:\w10ui"
+          set "repo=C:\w10ui\W10UI"
           set "autostart=1"
           W10UI.cmd
