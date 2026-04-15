@@ -12,31 +12,19 @@ jobs:
     timeout-minutes: 420
 
     steps:
-
       - uses: actions/checkout@v4
 
-      # -------------------------
-      # 7ZIP
-      # -------------------------
       - name: Instalar 7zip
         run: choco install 7zip -y
 
-      # -------------------------
-      # PASTAS
-      # -------------------------
       - name: Preparar ambiente
         shell: powershell
         run: |
-          $ErrorActionPreference = "Stop"
-
           mkdir C:\work
           mkdir C:\base
           mkdir C:\iso
           mkdir C:\out
 
-      # -------------------------
-      # BAIXAR PARTES
-      # -------------------------
       - name: Baixar partes ISO base
         shell: powershell
         run: |
@@ -45,52 +33,35 @@ jobs:
           curl.exe -L -o C:\work\files.zip.003 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003
           curl.exe -L -o C:\work\files.zip.004 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004
 
-      # -------------------------
-      # EXTRAIR MULTIPART
-      # -------------------------
       - name: Extrair ZIP multipart
         shell: powershell
         run: |
           & "C:\Program Files\7-Zip\7z.exe" x C:\work\files.zip.001 -oC:\base -y
 
-      # -------------------------
-      # LOCALIZAR FILES + ISO
-      # -------------------------
       - name: Localizar ISO
         id: iso
         shell: powershell
         run: |
           $files = Get-ChildItem C:\base -Recurse -Directory | Where {$_.Name -eq "Files"} | Select -First 1
-
           if (!$files) { throw "Pasta Files não encontrada" }
 
           $iso = Get-ChildItem $files.FullName -Filter *.iso -Recurse | Select -First 1
-
           if (!$iso) { throw "ISO não encontrada" }
 
-          echo "iso=$($iso.FullName)" >> $env:GITHUB_OUTPUT
-          echo "files=$($files.FullName)" >> $env:GITHUB_OUTPUT
+          "iso=$($iso.FullName)" >> $env:GITHUB_OUTPUT
+          "files=$($files.FullName)" >> $env:GITHUB_OUTPUT
 
-      # -------------------------
-      # EXTRAIR ISO
-      # -------------------------
       - name: Extrair ISO base
         shell: powershell
         run: |
           & "C:\Program Files\7-Zip\7z.exe" x "${{ steps.iso.outputs.iso }}" -oC:\iso -y
 
-      # -------------------------
-      # LIMPAR LIXO PRA ESPAÇO
-      # -------------------------
       - name: Limpeza pesada
         shell: powershell
         run: |
           Remove-Item C:\work -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item C:\base -Recurse -Force -ErrorAction SilentlyContinue
 
-      # -------------------------
-      # CONFIG W10UI
-      # -------------------------
       - name: Configurar W10UI.ini
         shell: powershell
         run: |
@@ -100,13 +71,9 @@ jobs:
             -replace 'Target\s*=.*',"Target=C:\iso" `
             -replace 'AutoStart\s*=.*',"AutoStart=1" `
             -replace 'ISO\s*=.*',"ISO=1" `
-            -replace 'SkipWinRE\s*=.*',"SkipWinRE=1" `
             -replace 'Cleanup\s*=.*',"Cleanup=1" `
             | Set-Content $ini
 
-      # -------------------------
-      # FORÇAR INDEX 4 (PRO)
-      # -------------------------
       - name: Exportar apenas PRO
         shell: powershell
         run: |
@@ -119,43 +86,30 @@ jobs:
           Remove-Item C:\iso\sources\install.wim
           Rename-Item C:\iso\sources\install_new.wim install.wim
 
-      # -------------------------
-      # RODAR W10UI (CRIA ISO)
-      # -------------------------
       - name: Rodar W10UI
         shell: cmd
         working-directory: ${{ steps.iso.outputs.files }}
         run: |
           call W10UI.cmd
 
-      # -------------------------
-      # LOCALIZAR ISO FINAL
-      # -------------------------
       - name: Localizar ISO final
         id: final
         shell: powershell
         run: |
           $iso = Get-ChildItem C:\ -Recurse -Filter *.iso | Sort LastWriteTime -Descending | Select -First 1
-
           if (!$iso) { throw "ISO final não encontrada" }
 
-          echo "iso=$($iso.FullName)" >> $env:GITHUB_OUTPUT
+          "iso=$($iso.FullName)" >> $env:GITHUB_OUTPUT
 
-      # -------------------------
-      # SPLIT 1900MB
-      # -------------------------
-      - name: Compactar ISO (split)
+      - name: Compactar ISO
         shell: powershell
         run: |
           & "C:\Program Files\7-Zip\7z.exe" a -tzip -v1900m C:\out\ISO.zip "${{ steps.final.outputs.iso }}"
 
-      # -------------------------
-      # RELEASE
-      # -------------------------
       - name: Upload Release
         uses: ncipollo/release-action@v1
         with:
-          tag: "win11-pro-${{ github.run_id }}"
-          name: "Win11 PRO ISO ${{ github.run_id }}"
-          artifacts: "C:\out\ISO.zip*"
+          tag: win11-pro-${{ github.run_id }}
+          name: Win11 PRO ISO ${{ github.run_id }}
+          artifacts: C:\out\ISO.zip*
           token: ${{ github.token }}
