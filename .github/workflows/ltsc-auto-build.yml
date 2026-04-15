@@ -1,4 +1,4 @@
-name: BUILD ISO LTSC FINAL (FIX DRIVER + CLEAN)
+name: BUILD ISO LTSC FINAL (TARGET CORRETO)
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ jobs:
         run: |
           mkdir work
           mkdir work\files
-          mkdir work\base
+          mkdir work\files\base
 
       # 3. Download ISO (3 partes)
       - name: Baixar ISO
@@ -32,75 +32,73 @@ jobs:
           cd work
           7z x W10LTSC2021.7z.001 -oiso
 
-      # 5. Mover ISO
-      - name: Mover ISO
+      # 5. Copiar ISO original (sem renomear)
+      - name: Copiar ISO
         run: |
-          move work\iso\*.iso work\files\base.iso
+          move work\iso\*.iso work\files\
 
-      # 6. Extrair ISO base (target)
-      - name: Extrair ISO base
+      # 6. Extrair ISO → files\base (TARGET REAL)
+      - name: Extrair ISO para base
         run: |
-          7z x work\files\base.iso -owork\base
+          for %%f in (work\files\*.iso) do 7z x "%%f" -owork\files\base
 
-      # 🔥 LIMPEZA PARTES ISO (economizar espaço)
-      - name: Limpar partes ISO
+      # 7. Limpar partes ISO
+      - name: Limpar partes
         run: |
-          del /q work\W10LTSC2021.7z.*
+          Remove-Item work\W10LTSC2021.7z.* -Force -ErrorAction SilentlyContinue
 
-      # 7. Baixar W10UI
+      # 8. Remover ISO original
+      - name: Remover ISO
+        run: |
+          Remove-Item work\files\*.iso -Force
+
+      # 9. Baixar W10UI
       - name: Baixar W10UI
         run: |
           cd work
           curl -L -o W10UI.zip https://tiny.cc/W10UI
 
-      # 8. Extrair W10UI
+      # 10. Extrair W10UI na raiz files
       - name: Extrair W10UI
         run: |
           7z x work\W10UI.zip -owork\files\
 
-      # 🔥 LIMPEZA ZIP
-      - name: Limpar W10UI zip
+      # 11. Limpar zip
+      - name: Limpar zip
         run: |
-          del work\W10UI.zip
+          Remove-Item work\W10UI.zip -Force
 
-      # 9. Baixar driver NVIDIA
+      # 12. Baixar driver NVIDIA
       - name: Baixar driver NVIDIA
         run: |
           cd work
           curl -L -o nvidia.exe https://us.download.nvidia.com/Windows/341.92/341.92-desktop-win10-64bit-international.exe
 
-      # 10. EXTRAIR DRIVER COM 7ZIP (CORRETO)
-      - name: Extrair driver com 7zip
+      # 13. Extrair driver com 7zip
+      - name: Extrair driver
         run: |
           7z x work\nvidia.exe -owork\nvidia
 
-      # 🔥 LIMPEZA EXE DRIVER
-      - name: Limpar exe driver
-        run: |
-          del work\nvidia.exe
-
-      # 11. Copiar Display.Driver (SEM RENOMEAR)
+      # 14. Copiar Display.Driver → Drivers\OS
       - name: Preparar driver
         run: |
           mkdir work\files\Drivers\OS
           xcopy /E /I /Y work\nvidia\Display.Driver work\files\Drivers\OS\Display.Driver
 
-          echo === VALIDANDO INF ===
-          dir work\files\Drivers\OS\Display.Driver\*.inf /s
-
-      # 🔥 LIMPEZA PASTA EXTRAÇÃO DRIVER
-      - name: Limpar driver extraído
+      # 15. Limpar driver temp
+      - name: Limpar driver
         run: |
-          rmdir /s /q work\nvidia
+          Remove-Item work\nvidia -Recurse -Force
+          Remove-Item work\nvidia.exe -Force
 
-      # 12. Updates
+      # 16. Updates (coloque os reais depois)
       - name: Preparar updates
         run: |
           mkdir work\files\updates
           echo coloque_updates_aqui > work\files\updates\readme.txt
 
-      # 13. Configurar W10UI.ini
-      - name: Criar W10UI.ini
+      # 17. Criar W10UI.ini (TARGET DEFINITIVO)
+      - name: Configurar W10UI
         run: |
           echo [W10UI] > work\files\W10UI.ini
           echo AutoStart=1 >> work\files\W10UI.ini
@@ -112,34 +110,29 @@ jobs:
           echo StartVirtual=0 >> work\files\W10UI.ini
           echo wim2esd=1 >> work\files\W10UI.ini
           echo SkipISO=0 >> work\files\W10UI.ini
-          echo Target=..\base >> work\files\W10UI.ini
+          echo Target=.\base >> work\files\W10UI.ini
 
-      # 14. Rodar W10UI
+      # 18. Executar W10UI
       - name: Executar W10UI
         run: |
           cd work\files
+          echo === EXECUTANDO W10UI ===
           call W10UI.cmd
 
-      # 🔥 LIMPEZA ISO BASE (liberar espaço)
-      - name: Limpar ISO base
-        run: |
-          del work\files\base.iso
-          rmdir /s /q work\base
-
-      # 15. Organizar saída
-      - name: Organizar ISO final
+      # 19. Organizar ISO final
+      - name: Organizar saída
         run: |
           mkdir output
           move work\files\*.iso output\
 
-      # 16. Compactar
-      - name: Compactar ISO final
+      # 20. Compactar ISO (1900MB)
+      - name: Compactar ISO
         run: |
           cd output
           7z a -v1900m FINAL_LTSC.7z *.iso
 
-      # 17. Upload
-      - name: Upload final
+      # 21. Upload
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: ISO_FINAL
