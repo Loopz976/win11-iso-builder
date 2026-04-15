@@ -1,4 +1,4 @@
-name: Build Win10 LTSC (FINAL W10UI ZIP)
+name: Build Win10 LTSC (FINAL W10UI AUTO FIXED)
 
 on:
   workflow_dispatch:
@@ -60,9 +60,9 @@ jobs:
           }
 
       # ================================
-      # 🔥 BAIXAR W10UI ZIP
+      # 🔥 BAIXAR W10UI (ZIP)
       # ================================
-      - name: Baixar W10UI (ZIP)
+      - name: Baixar W10UI
         shell: powershell
         run: |
           curl.exe -L https://tiny.cc/W10UI -o w10ui.zip
@@ -72,14 +72,16 @@ jobs:
         run: |
           & "C:\Program Files\7-Zip\7z.exe" x w10ui.zip -oD:\W10UI -y
 
-          # Ajusta pasta (caso venha subpasta)
           $dir = Get-ChildItem D:\W10UI | Where-Object {$_.PSIsContainer} | Select-Object -First 1
           if ($dir) {
             Move-Item "$($dir.FullName)\*" D:\W10UI -Force
             Remove-Item $dir.FullName -Recurse -Force
           }
 
-      - name: Criar pastas
+      # ================================
+      # 🔥 PREPARAR PASTAS
+      # ================================
+      - name: Criar dirs
         run: |
           mkdir D:\W10UI_TEMP
           mkdir D:\MOUNT
@@ -96,6 +98,11 @@ jobs:
           $links = [regex]::Matches($html,'href="(http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/[^"]+)"')
           $names = [regex]::Matches($html,'rename "([^"]+)" "([^"]+)"')
 
+          if ($links.Count -ne $names.Count) {
+            Write-Error "Erro links/names"
+            exit 1
+          }
+
           for($i=0;$i -lt $links.Count;$i++){
             $url = $links[$i].Groups[1].Value
             $name = $names[$i].Groups[2].Value
@@ -105,7 +112,7 @@ jobs:
           }
 
       # ================================
-      # 🔥 CONFIGURAR W10UI.ini
+      # 🔥 CONFIGURAR INI (FIX REAL)
       # ================================
       - name: Configurar INI
         shell: powershell
@@ -115,6 +122,7 @@ jobs:
             "_Target=D:\ISO\sources\install.wim",
             "_MountDir=D:\MOUNT",
             "AutoStart=1",
+            "SkipISO=1",
             "Cleanup=1",
             "ResetBase=1",
             "LCUwinre=1"
@@ -123,13 +131,13 @@ jobs:
           $ini | Set-Content "D:\W10UI\W10UI.ini" -Encoding ASCII
 
       # ================================
-      # 🔥 RODAR W10UI
+      # 🔥 RODAR W10UI (AUTO FIX)
       # ================================
-      - name: Integrar updates
+      - name: Integrar updates (W10UI AUTO)
         shell: cmd
         run: |
           cd D:\W10UI
-          call W10UI.cmd
+          call W10UI.cmd /auto
 
       # ================================
       # 🔥 VALIDAR BUILD
