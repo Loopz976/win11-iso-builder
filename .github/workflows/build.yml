@@ -1,4 +1,4 @@
-name: Win11 PRO W10UI FINAL KB5082052
+name: Win11 PRO W10UI FINAL ABSOLUTO
 
 on:
   workflow_dispatch:
@@ -82,21 +82,34 @@ jobs:
           Remove-Item C:\ISO\sources\install.wim
           Rename-Item C:\ISO\sources\install_pro.wim install.wim
 
-      # DRIVER NVIDIA
-      - name: Driver NVIDIA
+      # DRIVER NVIDIA (SOMENTE OS)
+      - name: Driver NVIDIA (OS only)
         shell: powershell
         run: |
           curl.exe -L -o C:\drv\nv.exe https://us.download.nvidia.com/Windows/342.01/342.01-desktop-win10-64bit-international.exe
           & "C:\Program Files\7-Zip\7z.exe" x C:\drv\nv.exe -oC:\drv\nv -y
-          mkdir "${{ steps.path.outputs.files }}\Drivers" -Force
-          Copy-Item C:\drv\nv\Display.Driver "${{ steps.path.outputs.files }}\Drivers" -Recurse -Force
+
+          mkdir "${{ steps.path.outputs.files }}\Drivers\OS" -Force
+          Copy-Item C:\drv\nv\Display.Driver "${{ steps.path.outputs.files }}\Drivers\OS" -Recurse -Force
+
           Remove-Item C:\drv -Recurse -Force
 
-      # UPDATE MSU (KB5082052)
-      - name: Baixar MSU mais recente
+      # UPDATE MSU (KB MAIS RECENTE)
+      - name: Baixar MSU com retry
         shell: powershell
         run: |
-          curl.exe -L -o C:\updates\kb.msu https://catalog.s.download.windowsupdate.com/c/msdownload/update/software/updt/2026/04/windows11.0-kb5082052-x64.msu
+          $url = "https://catalog.s.download.windowsupdate.com/c/msdownload/update/software/updt/2026/04/windows11.0-kb5082052-x64.msu"
+          $dest = "C:\updates\kb.msu"
+
+          for ($i=0; $i -lt 5; $i++) {
+            try {
+              curl.exe -L -o $dest $url
+              if ((Get-Item $dest).Length -gt 100MB) { break }
+            } catch {}
+            Start-Sleep -Seconds 5
+          }
+
+          if (!(Test-Path $dest)) { throw "Falha MSU" }
 
       - name: Copiar update
         shell: powershell
@@ -104,7 +117,7 @@ jobs:
           Copy-Item C:\updates\*.msu "${{ steps.path.outputs.files }}" -Force
           Remove-Item C:\updates -Recurse -Force
 
-      # CONFIG W10UI
+      # CONFIG W10UI (ABSOLUTO)
       - name: Configurar W10UI
         shell: powershell
         run: |
@@ -116,25 +129,30 @@ jobs:
           -replace 'ISO\s*=.*',"ISO=1" `
           -replace 'Cleanup\s*=.*',"Cleanup=1" `
           -replace 'ResetBase\s*=.*',"ResetBase=1" `
+          -replace 'Rebuild\s*=.*',"Rebuild=1" `
+          -replace 'AddUpdates\s*=.*',"AddUpdates=1" `
+          -replace 'AddDrivers\s*=.*',"AddDrivers=1" `
           -replace 'wim2esd\s*=.*',"wim2esd=1" `
+          -replace 'SkipWinRE\s*=.*',"SkipWinRE=1" `
           | Set-Content $ini
 
-      # LIMPEZA PESADA (ANTI ERRO ESPAÇO)
+      # LIMPEZA EXTREMA
       - name: Limpeza antes do W10UI
         shell: powershell
         run: |
           dism /Cleanup-Wim
+          Remove-Item C:\Windows\Temp\* -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $env:TEMP\* -Recurse -Force -ErrorAction SilentlyContinue
           Get-PSDrive C
 
-      # W10UI
+      # W10UI (FAZ TUDO)
       - name: Rodar W10UI
         shell: cmd
         working-directory: ${{ steps.path.outputs.files }}
         run: call W10UI.cmd
 
-      # PEGAR ISO
-      - name: Encontrar ISO final
+      # ISO FINAL
+      - name: Encontrar ISO
         id: final
         shell: powershell
         run: |
@@ -149,7 +167,7 @@ jobs:
           & "C:\Program Files\7-Zip\7z.exe" a -tzip -v1900m C:\out\ISO.zip "${{ steps.final.outputs.iso }}"
 
       # LIMPEZA FINAL
-      - name: Limpeza final total
+      - name: Limpeza final
         shell: powershell
         run: |
           Remove-Item C:\ISO -Recurse -Force -ErrorAction SilentlyContinue
@@ -160,7 +178,7 @@ jobs:
       - name: Upload Release
         uses: ncipollo/release-action@v1
         with:
-          tag: win11-kb5082052-${{ github.run_id }}
-          name: Win11 PRO FINAL KB5082052
+          tag: win11-abs-${{ github.run_id }}
+          name: Win11 PRO FINAL ABSOLUTO
           artifacts: C:\out\ISO.zip*
           token: ${{ github.token }}
