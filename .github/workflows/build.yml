@@ -1,4 +1,4 @@
-name: Win11 PRO W10UI OK
+name: Win11 W10UI OK
 
 on:
   workflow_dispatch:
@@ -9,7 +9,6 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 360
 
     steps:
       - uses: actions/checkout@v4
@@ -17,12 +16,11 @@ jobs:
       - name: Instalar 7zip
         run: choco install 7zip -y
 
-      - name: Preparar ambiente
+      - name: Preparar
         shell: powershell
         run: |
-          New-Item C:\ISO -ItemType Directory -Force
-          New-Item C:\base -ItemType Directory -Force
-          New-Item C:\out -ItemType Directory -Force
+          mkdir C:\ISO
+          mkdir C:\base
 
       - name: Baixar base
         shell: powershell
@@ -34,49 +32,29 @@ jobs:
 
           & "C:\Program Files\7-Zip\7z.exe" x base.001 -oC:\base -y
 
-      - name: Localizar base
+      - name: Localizar
         id: f
         shell: powershell
         run: |
-          $files = Get-ChildItem C:\base -Recurse -Directory | Where {$_.Name -eq "Files"} | Select -First 1
-          $iso = Get-ChildItem $files.FullName -Recurse -Filter *.iso | Select -First 1
-
-          "files=$($files.FullName)" >> $env:GITHUB_OUTPUT
-          "iso=$($iso.FullName)" >> $env:GITHUB_OUTPUT
+          $f = Get-ChildItem C:\base -Recurse -Directory | Where {$_.Name -eq "Files"} | Select -First 1
+          $i = Get-ChildItem $f.FullName -Recurse -Filter *.iso | Select -First 1
+          "files=$($f.FullName)" >> $env:GITHUB_OUTPUT
+          "iso=$($i.FullName)" >> $env:GITHUB_OUTPUT
 
       - name: Extrair ISO
         shell: powershell
         run: |
           & "C:\Program Files\7-Zip\7z.exe" x "${{ steps.f.outputs.iso }}" -oC:\ISO -y
 
-      - name: Preparar WIM (Index 4)
+      - name: Garantir install.wim
         shell: powershell
         run: |
           if (!(Test-Path "C:\ISO\sources\install.wim")) {
             dism /Export-Image /SourceImageFile:C:\ISO\sources\install.esd /All /DestinationImageFile:C:\ISO\sources\install.wim
           }
 
-          dism /Export-Image /SourceImageFile:C:\ISO\sources\install.wim /SourceIndex:4 /DestinationImageFile:C:\ISO\sources\install_new.wim
-          Remove-Item C:\ISO\sources\install.wim -Force
-          Rename-Item C:\ISO\sources\install_new.wim install.wim
-
-      - name: Driver NVIDIA
-        shell: powershell
-        run: |
-          curl.exe -L -o nv.exe https://us.download.nvidia.com/Windows/342.01/342.01-desktop-win10-64bit-international.exe
-          & "C:\Program Files\7-Zip\7z.exe" x nv.exe -onv -y
-
-          New-Item "${{ steps.f.outputs.files }}\Drivers\OS" -ItemType Directory -Force
-          Copy-Item nv\Display.Driver "${{ steps.f.outputs.files }}\Drivers\OS" -Recurse -Force
-
-      - name: Baixar update
-        shell: powershell
-        run: |
-          curl.exe -L -o kb.msu https://catalog.s.download.windowsupdate.com/c/msdownload/update/software/updt/2026/04/windows11.0-kb5082052-x64.msu
-          Copy-Item kb.msu "${{ steps.f.outputs.files }}" -Force
-
-      # 🔥 INI SEGURO (SEM ERRO)
-      - name: Criar W10UI.ini
+      # 🔥 INI CORRETO (SEM ERRO)
+      - name: Criar INI
         shell: powershell
         run: |
           $ini = "${{ steps.f.outputs.files }}\W10UI.ini"
@@ -87,29 +65,16 @@ jobs:
           Add-Content $ini "ISO=1"
           Add-Content $ini "AddUpdates=1"
           Add-Content $ini "AddDrivers=1"
-          Add-Content $ini "wim2esd=1"
           Add-Content $ini "Cleanup=1"
+
+          Get-Content $ini
+
+      - name: Verificar estrutura
+        shell: powershell
+        run: |
+          if (!(Test-Path "C:\ISO\sources\install.wim")) { throw "install.wim não existe" }
 
       - name: Rodar W10UI
         shell: cmd
         working-directory: ${{ steps.f.outputs.files }}
         run: W10UI.cmd
-
-      - name: Pegar ISO
-        id: iso
-        shell: powershell
-        run: |
-          $iso = Get-ChildItem C:\ -Recurse -Filter *.iso | Sort LastWriteTime -Descending | Select -First 1
-          "iso=$($iso.FullName)" >> $env:GITHUB_OUTPUT
-
-      - name: Compactar
-        shell: powershell
-        run: |
-          & "C:\Program Files\7-Zip\7z.exe" a -v1900m C:\out\iso.zip "${{ steps.iso.outputs.iso }}"
-
-      - name: Upload Release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: build-${{ github.run_id }}
-          artifacts: C:\out\iso.zip*
-          token: ${{ github.token }}
