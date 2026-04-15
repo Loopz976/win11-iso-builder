@@ -1,4 +1,4 @@
-name: LTSC AUTO BUILD (UUP REAL + ESD + SPLIT)
+name: LTSC AUTO BUILD (UUP AUTO + ESD + SPLIT)
 
 on:
   workflow_dispatch:
@@ -9,7 +9,9 @@ jobs:
 
     steps:
 
+    # ================================
     # 🔹 CACHE ISO BASE
+    # ================================
     - name: Cache ISO
       id: cache-iso
       uses: actions/cache@v4
@@ -17,14 +19,20 @@ jobs:
         path: source.iso
         key: ltsc-iso-v1
 
-    # 🔹 DOWNLOAD ISO
-    - name: Baixar ISO
+    # ================================
+    # 🔹 DOWNLOAD ISO BASE
+    # ================================
+    - name: Baixar ISO partes
       if: steps.cache-iso.outputs.cache-hit != 'true'
+      shell: powershell
       run: |
-        curl -L -o part.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
-        curl -L -o part.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
-        curl -L -o part.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
+        Invoke-WebRequest "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001" -OutFile part.7z.001
+        Invoke-WebRequest "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002" -OutFile part.7z.002
+        Invoke-WebRequest "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003" -OutFile part.7z.003
 
+    # ================================
+    # 🔹 7ZIP
+    # ================================
     - name: Instalar 7zip
       run: choco install 7zip -y
 
@@ -41,8 +49,10 @@ jobs:
         $iso = Get-ChildItem *.iso | Select-Object -First 1
         Rename-Item $iso.Name source.iso
 
+    # ================================
     # 🔹 EXTRAIR ISO
-    - name: Criar work
+    # ================================
+    - name: Criar pasta work
       run: mkdir work
 
     - name: Extrair ISO
@@ -50,28 +60,23 @@ jobs:
       run: |
         & "C:\Program Files\7-Zip\7z.exe" x source.iso -owork -aoa
 
-    # 🔹 BACKUP
+    # 🔹 BACKUP ORIGINAL
     - name: Backup WIM
-      run: copy work\sources\install.wim work\sources\install_original.wim
-
-    # ================================
-    # 🔥 DOWNLOAD DOS UPDATES (SEU PRINT)
-    # ================================
-    - name: Criar pasta updates
-      run: mkdir updates
-
-    - name: Baixar CABs
       shell: powershell
       run: |
-        cd updates
+        Copy-Item work\sources\install.wim work\sources\install_original.wim
 
-        curl -L -O https://catalog.s.download.windowsupdate.com/.../SSU-19041.7183-x64.cab
-        curl -L -O https://catalog.s.download.windowsupdate.com/.../Windows10.0-KB5003791-x64.cab
-        curl -L -O https://catalog.s.download.windowsupdate.com/.../Windows10.0-KB5007401-x64.cab
-        curl -L -O https://catalog.s.download.windowsupdate.com/.../Windows10.0-KB5008575-x64.cab
-        curl -L -O https://catalog.s.download.windowsupdate.com/.../Windows10.0-KB5007427-x64.cab
-        curl -L -O https://catalog.s.download.windowsupdate.com/.../Windows10.0-KB5082200-x64.cab
-        curl -L -O https://catalog.s.download.windowsupdate.com/.../Windows10.0-KB5082241-x64.cab
+    # ================================
+    # 🔥 UUP AUTOMÁTICO (SEM ERRO)
+    # ================================
+    - name: Clonar UUP dump
+      run: git clone https://github.com/uup-dump/uup-dump.git uup
+
+    - name: Baixar updates automaticamente
+      shell: powershell
+      run: |
+        cd uup
+        cmd /c uup_download_windows.cmd
 
     # ================================
     # 🔥 MOUNT
@@ -85,22 +90,17 @@ jobs:
         dism /Mount-Wim /WimFile:work\sources\install.wim /index:1 /MountDir:mount
 
     # ================================
-    # 🔥 INTEGRAÇÃO CORRETA
+    # 🔥 INTEGRAR UPDATES
     # ================================
-    - name: Integrar SSU
+    - name: Integrar updates
       shell: powershell
       run: |
-        dism /Image:mount /Add-Package /PackagePath:updates\SSU-19041.7183-x64.cab
-
-    - name: Integrar LCU
-      shell: powershell
-      run: |
-        dism /Image:mount /Add-Package /PackagePath:updates
+        dism /Image:mount /Add-Package /PackagePath:uup
 
     # ================================
     # 🔥 CLEANUP HARD
     # ================================
-    - name: Cleanup
+    - name: Limpeza
       shell: powershell
       run: |
         dism /Image:mount /Cleanup-Image /StartComponentCleanup /ResetBase
@@ -114,9 +114,9 @@ jobs:
         dism /Unmount-Wim /MountDir:mount /Commit
 
     # ================================
-    # 🔥 ESD (MAX COMPRESSION)
+    # 🔥 CONVERTER PRA ESD
     # ================================
-    - name: Converter para ESD
+    - name: Converter ESD
       shell: powershell
       run: |
         dism /Export-Image /SourceImageFile:work\sources\install.wim `
@@ -124,7 +124,7 @@ jobs:
         /DestinationImageFile:work\sources\install.esd `
         /Compress:recovery
 
-        del work\sources\install.wim
+        Remove-Item work\sources\install.wim -Force
 
     # ================================
     # 🔥 CRIAR ISO
@@ -137,12 +137,12 @@ jobs:
       run: |
         $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
 
-        & $oscdimg -bwork\boot\etfsboot.com -u2 -h -m -o -lLTSC_UUP work final.iso
+        & $oscdimg -bwork\boot\etfsboot.com -u2 -h -m -o -lLTSC_FINAL work final.iso
 
     # ================================
     # 🔥 SPLIT 1900MB
     # ================================
-    - name: Split ISO
+    - name: Dividir ISO
       shell: powershell
       run: |
         & "C:\Program Files\7-Zip\7z.exe" a split.7z final.iso -v1900m
@@ -153,7 +153,7 @@ jobs:
     # ================================
     # 📦 UPLOAD
     # ================================
-    - name: Upload
+    - name: Upload partes
       uses: actions/upload-artifact@v4
       with:
         name: LTSC-FINAL
