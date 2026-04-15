@@ -1,4 +1,4 @@
-name: Build Windows 11 23H2 PRO BASE ISO
+name: Build Windows 11 23H2 PRO ISO (Base Clean)
 
 on:
   workflow_dispatch:
@@ -12,80 +12,74 @@ jobs:
       - name: Preparar ambiente
         run: |
           mkdir C:\work
-          mkdir C:\work\iso\sources
+          mkdir C:\mount
+          mkdir C:\iso
 
-      # 📥 Baixar ESD (OneDrive API - direto)
-      - name: Baixar ESD (OneDrive)
+      # 📥 Baixar partes
+      - name: Baixar partes
+        run: |
+          curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.001" -o C:\work\files.zip.001
+          curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.002" -o C:\work\files.zip.002
+          curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003" -o C:\work\files.zip.003
+          curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004" -o C:\work\files.zip.004
+
+      # 🔗 Juntar ZIP
+      - name: Juntar arquivos
+        run: |
+          copy /b C:\work\files.zip.001 + C:\work\files.zip.002 + C:\work\files.zip.003 + C:\work\files.zip.004 C:\work\files.zip
+
+      # 📦 Extrair ZIP
+      - name: Extrair
+        run: |
+          Expand-Archive C:\work\files.zip -DestinationPath C:\work\extract
+
+      # 🔍 Encontrar ISO
+      - name: Localizar ISO
         shell: powershell
         run: |
-          $url = "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvYy81NzkwODAxMDBjZDcxYzQxL0lRQmVORlBhSC10c1I3VjgzaENxcGoyeEFWelM4WEQyMmE4SUJ1V0YyVk5ienNZ/content"
-          $output = "C:\work\install.esd"
+          $iso = Get-ChildItem -Path C:\work\extract -Recurse -Filter *.iso | Select-Object -First 1
+          Copy-Item $iso.FullName C:\work\base.iso
 
-          Invoke-WebRequest -Uri $url -OutFile $output
+      # 💿 Montar ISO
+      - name: Montar ISO
+        run: Mount-DiskImage -ImagePath C:\work\base.iso
 
-          if (!(Test-Path $output)) {
-            throw "Download falhou"
-          }
+      # 📂 Copiar conteúdo
+      - name: Copiar arquivos ISO
+        run: robocopy D:\ C:\iso /E
 
-          if ((Get-Item $output).Length -lt 100MB) {
-            throw "Arquivo inválido"
-          }
-
-          Write-Output "Download concluído"
-
-      # 🔍 Detectar index PRO
-      - name: Detectar index PRO
-        shell: powershell
+      # 🔄 Exportar somente PRO (index 4)
+      - name: Manter apenas PRO
         run: |
-          $info = dism /Get-WimInfo /WimFile:C:\work\install.esd
-          $pro = ($info | Select-String "Professional" | Select-Object -First 1)
+          dism /Export-Image /SourceImageFile:C:\iso\sources\install.wim /SourceIndex:4 /DestinationImageFile:C:\iso\sources\install2.wim /Compress:max
 
-          if (-not $pro) {
-            throw "PRO não encontrado"
-          }
-
-          $index = ($pro -split ":")[0] -replace "[^0-9]"
-          echo "INDEX=$index" >> $env:GITHUB_ENV
-
-      # 📥 Baixar wimlib
-      - name: Baixar wimlib
+      - name: Substituir WIM
         run: |
-          Invoke-WebRequest -Uri "https://wimlib.net/downloads/wimlib-1.13.6-windows-x86_64-bin.zip" -OutFile C:\work\wimlib.zip
-          Expand-Archive C:\work\wimlib.zip -DestinationPath C:\work\wimlib
+          del C:\iso\sources\install.wim
+          ren C:\iso\sources\install2.wim install.wim
 
-      # 🔄 Converter ESD → WIM
-      - name: Converter com wimlib
-        run: |
-          C:\work\wimlib\wimlib-1.13.6-windows-x86_64-bin\wimlib-imagex.exe export C:\work\install.esd $env:INDEX C:\work\iso\sources\install.wim --compress=LZX
-
-      # 🔧 Instalar ADK (oscdimg)
+      # 🔧 Instalar ADK
       - name: Instalar ADK
         run: |
           Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2196224" -OutFile C:\work\adk.exe
           Start-Process C:\work\adk.exe -ArgumentList "/quiet /norestart /features OptionId.DeploymentTools" -Wait
 
-      # 💿 Criar ISO
-      - name: Criar ISO BASE
+      # 💿 Criar ISO final
+      - name: Criar ISO FINAL
         run: |
           $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
-          & $oscdimg -u2 -h -m -lWIN11_23H2_PRO_BASE C:\work\iso C:\work\Win11_23H2_Pro_ptBR_x64_22631.2861_Base.iso
+          & $oscdimg -bC:\iso\boot\etfsboot.com -u2 -h -m -lWIN11_23H2_PRO_CLEAN C:\iso C:\work\Win11_23H2_Pro_Clean.iso
 
       # 📤 Upload Release
-      - name: Upload Release
+      - name: Upload
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: win11-23h2-pro-22631-base
-          name: Windows 11 23H2 Pro Base ISO (22631.2861)
+          tag_name: win11-23h2-pro-clean
+          name: Windows 11 23H2 Pro Clean ISO
           body: |
-            Windows 11 23H2 Pro Base ISO
+            Windows 11 23H2 Pro Clean ISO
 
-            - Version: 23H2
-            - Build: 22631.2861
-            - Edition: Professional
-            - Language: pt-BR
-            - Architecture: x64
-
-            Source: Official Microsoft ESD
-
-            Clean base image for customization pipeline.
-          files: C:\work\Win11_23H2_Pro_ptBR_x64_22631.2861_Base.iso
+            - Edition: Professional (Index 4)
+            - Source: Original untouched ISO
+            - Clean and ready for customization
+          files: C:\work\Win11_23H2_Pro_Clean.iso
