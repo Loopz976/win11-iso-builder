@@ -1,4 +1,4 @@
-name: Teste ISO com wimlib
+name: Teste WIM FIX
 
 on:
   workflow_dispatch:
@@ -12,19 +12,20 @@ jobs:
       - name: Instalar wimlib
         run: choco install wimlib -y
 
-      - name: Preparar estrutura ISO
+      - name: Preparar estrutura
         shell: powershell
         run: |
           mkdir C:\iso
+          mkdir C:\work
           echo TESTE > C:\iso\arquivo.txt
 
-      - name: Criar ISO com wimlib
+      - name: Criar WIM
         shell: powershell
         run: |
           wimlib-imagex capture C:\iso C:\work\teste.wim --compress=LZX
 
           if (!(Test-Path "C:\work\teste.wim")) {
-            throw "Falha ao criar imagem"
+            throw "Falha ao criar WIM"
           }
 
           Write-Host "WIM criado com sucesso!"
