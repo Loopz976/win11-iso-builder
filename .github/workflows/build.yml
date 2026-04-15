@@ -1,80 +1,33 @@
-name: Win11 W10UI OK
+name: TESTE W10UI TARGET
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  build:
+  test:
     runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Instalar 7zip
-        run: choco install 7zip -y
-
-      - name: Preparar
+      - name: Preparar fake ISO
         shell: powershell
         run: |
-          mkdir C:\ISO
-          mkdir C:\base
+          mkdir C:\ISO\sources -Force
+          New-Item C:\ISO\sources\install.wim -ItemType File
 
-      - name: Baixar base
+      - name: Baixar W10UI
         shell: powershell
         run: |
-          curl.exe -L -o base.001 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.001
-          curl.exe -L -o base.002 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.002
-          curl.exe -L -o base.003 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003
-          curl.exe -L -o base.004 https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004
+          curl.exe -L -o w10ui.zip https://github.com/abbodi1406/WHD/raw/master/W10UI.zip
+          Expand-Archive w10ui.zip -DestinationPath C:\w10ui
 
-          & "C:\Program Files\7-Zip\7z.exe" x base.001 -oC:\base -y
-
-      - name: Localizar
-        id: f
-        shell: powershell
-        run: |
-          $f = Get-ChildItem C:\base -Recurse -Directory | Where {$_.Name -eq "Files"} | Select -First 1
-          $i = Get-ChildItem $f.FullName -Recurse -Filter *.iso | Select -First 1
-          "files=$($f.FullName)" >> $env:GITHUB_OUTPUT
-          "iso=$($i.FullName)" >> $env:GITHUB_OUTPUT
-
-      - name: Extrair ISO
-        shell: powershell
-        run: |
-          & "C:\Program Files\7-Zip\7z.exe" x "${{ steps.f.outputs.iso }}" -oC:\ISO -y
-
-      - name: Garantir install.wim
-        shell: powershell
-        run: |
-          if (!(Test-Path "C:\ISO\sources\install.wim")) {
-            dism /Export-Image /SourceImageFile:C:\ISO\sources\install.esd /All /DestinationImageFile:C:\ISO\sources\install.wim
-          }
-
-      # 🔥 INI CORRETO (SEM ERRO)
-      - name: Criar INI
-        shell: powershell
-        run: |
-          $ini = "${{ steps.f.outputs.files }}\W10UI.ini"
-
-          Set-Content $ini "Target=C:\ISO"
-          Add-Content $ini "Repo=Files"
-          Add-Content $ini "AutoStart=1"
-          Add-Content $ini "ISO=1"
-          Add-Content $ini "AddUpdates=1"
-          Add-Content $ini "AddDrivers=1"
-          Add-Content $ini "Cleanup=1"
-
-          Get-Content $ini
-
-      - name: Verificar estrutura
-        shell: powershell
-        run: |
-          if (!(Test-Path "C:\ISO\sources\install.wim")) { throw "install.wim não existe" }
-
-      - name: Rodar W10UI
+      # 🔥 FORÇA VIA VARIÁVEL (SEGREDO AQUI)
+      - name: Rodar W10UI FORÇADO
         shell: cmd
-        working-directory: ${{ steps.f.outputs.files }}
-        run: W10UI.cmd
+        working-directory: C:\w10ui
+        run: |
+          set "target=C:\ISO"
+          set "repo=C:\w10ui"
+          set "autostart=1"
+          W10UI.cmd
