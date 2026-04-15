@@ -1,4 +1,4 @@
-name: TESTE ISO PARTES
+name: TESTE ISO PARTES (COM LIMPEZA)
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ jobs:
     runs-on: windows-2022
 
     steps:
-    # 📥 BAIXAR TODAS AS PARTES
+    # 📥 BAIXAR PARTES
     - name: Baixar partes da ISO
       run: |
         curl -L -o W10LTSC2021.7z.001 "https://github.com/Loopz976/win11-iso-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001"
@@ -24,6 +24,12 @@ jobs:
       shell: powershell
       run: |
         & "C:\Program Files\7-Zip\7z.exe" x W10LTSC2021.7z.001 -aoa
+
+    # 🧹 LIMPAR PARTES (IMPORTANTE)
+    - name: Limpar arquivos desnecessários
+      shell: powershell
+      run: |
+        Remove-Item W10LTSC2021.7z.* -Force -ErrorAction SilentlyContinue
 
     # 🔍 VERIFICAR RESULTADO
     - name: Listar arquivos
