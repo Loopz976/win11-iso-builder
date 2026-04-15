@@ -14,12 +14,27 @@ jobs:
           mkdir C:\work
           mkdir C:\work\iso\sources
 
-      # 📥 Baixar ESD PRO oficial
+      # 📥 Baixar ESD PRO (robusto)
       - name: Baixar ESD PRO
+        shell: powershell
         run: |
-          Invoke-WebRequest -Uri "http://dl.delivery.mp.microsoft.com/filestreamingservice/files/1ae4a20e-24d5-43f0-bcdd-b7d7e6b72864/22631.2861.231204-0538.23H2_NI_RELEASE_SVC_REFRESH_CLIENTCONSUMER_RET_x64FRE_pt-br.esd" -OutFile C:\work\install.esd
+          $url = "http://dl.delivery.mp.microsoft.com/filestreamingservice/files/1ae4a20e-24d5-43f0-bcdd-b7d7e6b72864/22631.2861.231204-0538.23H2_NI_RELEASE_SVC_REFRESH_CLIENTCONSUMER_RET_x64FRE_pt-br.esd"
+          $output = "C:\work\install.esd"
 
-      # 🔍 Detectar index PRO automaticamente
+          for ($i=1; $i -le 5; $i++) {
+            try {
+              Invoke-WebRequest -Uri $url -OutFile $output -Headers @{ "User-Agent"="Mozilla/5.0" }
+              if ((Get-Item $output).Length -gt 100MB) {
+                Write-Output "Download concluído!"
+                break
+              }
+            } catch {
+              Write-Output "Tentativa $i falhou..."
+              Start-Sleep -Seconds 10
+            }
+          }
+
+      # 🔍 Detectar index PRO
       - name: Detectar index PRO
         shell: powershell
         run: |
@@ -29,7 +44,7 @@ jobs:
           echo "INDEX=$index" >> $env:GITHUB_ENV
 
       # 🔄 Converter ESD → WIM
-      - name: Converter ESD para WIM
+      - name: Converter imagem
         run: |
           dism /Export-Image /SourceImageFile:C:\work\install.esd /SourceIndex:$env:INDEX /DestinationImageFile:C:\work\iso\sources\install.wim /Compress:max
 
