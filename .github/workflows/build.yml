@@ -1,4 +1,4 @@
-name: Teste OSCdimg ADK
+name: Teste OSCdimg FIX
 
 on:
   workflow_dispatch:
@@ -9,48 +9,28 @@ jobs:
 
     steps:
 
-      - name: Preparar pasta
+      - name: Preparar pastas
         shell: powershell
         run: |
           mkdir C:\work
           mkdir C:\iso
 
-      - name: Criar arquivos fake ISO
+      - name: Criar estrutura fake
         shell: powershell
         run: |
           mkdir C:\iso\boot
           echo TESTE > C:\iso\arquivo.txt
           echo BOOT > C:\iso\boot\etfsboot.com
 
-      - name: Baixar ADK oficial
+      - name: Baixar oscdimg portátil
         shell: powershell
         run: |
-          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2196224" -OutFile C:\work\adk.exe
-
-      - name: Instalar Deployment Tools
-        shell: powershell
-        run: |
-          Start-Process C:\work\adk.exe -ArgumentList "/quiet /norestart /features OptionId.DeploymentTools" -Wait
-
-      - name: Localizar oscdimg
-        id: find
-        shell: powershell
-        run: |
-          $path = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe | Select-Object -First 1
-
-          if (-not $path) {
-            throw "oscdimg NÃO encontrado"
-          }
-
-          echo "path=$($path.FullName)" >> $env:GITHUB_OUTPUT
-          Write-Host "oscdimg encontrado em: $($path.FullName)"
+          curl.exe -L "https://github.com/abbodi1406/vcredist/raw/master/bin/oscdimg.exe" -o C:\work\oscdimg.exe
 
       - name: Testar criação ISO
         shell: powershell
         run: |
-          $oscdimg = "${{ steps.find.outputs.path }}"
-
-          & $oscdimg `
+          & "C:\work\oscdimg.exe" `
             -bC:\iso\boot\etfsboot.com `
             -u2 -h -m `
             -lTESTE_ISO `
@@ -58,12 +38,12 @@ jobs:
             C:\work\teste.iso
 
           if (!(Test-Path "C:\work\teste.iso")) {
-            throw "ISO NÃO foi criada"
+            throw "ISO não foi criada"
           }
 
           Write-Host "ISO criada com sucesso!"
 
-      - name: Upload artefato teste
+      - name: Upload teste
         uses: actions/upload-artifact@v4
         with:
           name: teste-iso
