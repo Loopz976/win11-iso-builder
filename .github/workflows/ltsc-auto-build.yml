@@ -1,4 +1,4 @@
-name: BUILD ISO LTSC FINAL (SAFE)
+name: BUILD ISO LTSC FINAL (REBUILD CLEAN)
 
 on:
   workflow_dispatch:
@@ -17,38 +17,40 @@ jobs:
           New-Item -ItemType Directory -Force -Path C:\Files | Out-Null
           New-Item -ItemType Directory -Force -Path work | Out-Null
 
-      # ISO
-      - name: Baixar ISO
+      # DOWNLOAD ISO (CORRIGIDO)
+      - name: Baixar ISO (3 partes)
         shell: powershell
         run: |
           Set-Location work
-          curl -L -o W10LTSC2021.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
-          curl -L -o W10LTSC2021.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
-          curl -L -o W10LTSC2021.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
+
+          Invoke-WebRequest -Uri "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001" -OutFile "part1.7z.001"
+          Invoke-WebRequest -Uri "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002" -OutFile "part2.7z.002"
+          Invoke-WebRequest -Uri "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003" -OutFile "part3.7z.003"
 
       - name: Extrair ISO
         shell: powershell
         run: |
           Set-Location work
-          7z x W10LTSC2021.7z.001 -oiso
+          7z x part1.7z.001 -oiso
 
       - name: Mover ISO
         shell: powershell
         run: |
           $iso = Get-ChildItem work\iso\*.iso | Select-Object -First 1
+          if (-not $iso) { throw "ISO não encontrada" }
           Move-Item $iso.FullName C:\Files\ -Force
 
       - name: Limpar partes
         shell: powershell
         run: |
-          Remove-Item work\W10LTSC2021.7z.* -Force -ErrorAction SilentlyContinue
+          Remove-Item work\*.7z.* -Force -ErrorAction SilentlyContinue
 
       # W10UI
       - name: Baixar W10UI
         shell: powershell
         run: |
           Set-Location work
-          curl -L -o W10UI.zip https://tiny.cc/W10UI
+          Invoke-WebRequest -Uri "https://tiny.cc/W10UI" -OutFile "W10UI.zip"
 
       - name: Extrair W10UI
         shell: powershell
@@ -65,14 +67,14 @@ jobs:
         shell: powershell
         run: |
           Set-Location work
-          curl -L -o nvidia.exe https://us.download.nvidia.com/Windows/341.92/341.92-desktop-win10-64bit-international.exe
+          Invoke-WebRequest -Uri "https://us.download.nvidia.com/Windows/341.92/341.92-desktop-win10-64bit-international.exe" -OutFile "nvidia.exe"
 
       - name: Extrair driver
         shell: powershell
         run: |
           7z x work\nvidia.exe -owork\nvidia
 
-      - name: Copiar driver
+      - name: Preparar driver
         shell: powershell
         run: |
           $dest = "C:\Files\Drivers\OS"
@@ -85,39 +87,41 @@ jobs:
           Remove-Item work\nvidia -Recurse -Force
           Remove-Item work\nvidia.exe -Force
 
-      # INI (SEM BLOCO MULTILINHA)
-      - name: Criar W10UI.ini
+      # INI (ISODIR DIRETO)
+      - name: Criar INI correto
         shell: powershell
         run: |
           $iso = (Get-ChildItem C:\Files\*.iso | Select-Object -First 1).FullName
-          $iniPath = "C:\Files\W10UI.ini"
+          if (-not $iso) { throw "ISO não encontrada para INI" }
 
-          Set-Content $iniPath "[W10UI-Configuration]"
-          Add-Content $iniPath "ISO=1"
-          Add-Content $iniPath "ISODir=$iso"
-          Add-Content $iniPath ""
-          Add-Content $iniPath "AutoStart=1"
-          Add-Content $iniPath "AddUpdates=1"
-          Add-Content $iniPath "AddDrivers=1"
-          Add-Content $iniPath ""
-          Add-Content $iniPath "Cleanup=1"
-          Add-Content $iniPath "ResetBase=1"
-          Add-Content $iniPath ""
-          Add-Content $iniPath "Net35=1"
-          Add-Content $iniPath "wim2esd=1"
-          Add-Content $iniPath ""
-          Add-Content $iniPath "Drv_Source=\Drivers"
+          $ini = "C:\Files\W10UI.ini"
+
+          Set-Content $ini "[W10UI-Configuration]"
+          Add-Content $ini "ISO=1"
+          Add-Content $ini "ISODir=$iso"
+          Add-Content $ini ""
+          Add-Content $ini "AutoStart=1"
+          Add-Content $ini "AddUpdates=1"
+          Add-Content $ini "AddDrivers=1"
+          Add-Content $ini ""
+          Add-Content $ini "Cleanup=1"
+          Add-Content $ini "ResetBase=1"
+          Add-Content $ini ""
+          Add-Content $ini "Net35=1"
+          Add-Content $ini "wim2esd=1"
+          Add-Content $ini ""
+          Add-Content $ini "Drv_Source=\Drivers"
 
       # DEBUG
       - name: Verificar estrutura
         shell: powershell
         run: |
-          Write-Host "FILES:"
+          Write-Host "===== FILES ====="
           Get-ChildItem C:\Files
-          Write-Host "DRIVERS:"
+          Write-Host "===== DRIVERS ====="
           Get-ChildItem C:\Files\Drivers\OS
 
-      # EXECUÇÃO
+      # EXECUTAR
       - name: Executar W10UI
         shell: powershell
         run: |
@@ -125,7 +129,7 @@ jobs:
           cmd /c W10UI.cmd
 
       # OUTPUT
-      - name: Organizar ISO
+      - name: Organizar ISO final
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path output | Out-Null
