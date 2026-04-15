@@ -1,4 +1,4 @@
-name: LTSC AUTO BUILD (FINAL PRO STABLE)
+name: LTSC AUTO BUILD (REAL UUP LINKS + FINAL)
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ jobs:
     steps:
 
     # ================================
-    # 🔹 CACHE ISO BASE
+    # 🔹 CACHE ISO
     # ================================
     - name: Cache ISO
       id: cache-iso
@@ -22,7 +22,7 @@ jobs:
     # ================================
     # 🔥 DOWNLOAD ISO
     # ================================
-    - name: Baixar ISO partes
+    - name: Baixar ISO
       if: steps.cache-iso.outputs.cache-hit != 'true'
       shell: powershell
       run: |
@@ -33,7 +33,7 @@ jobs:
     - name: Instalar 7zip
       run: choco install 7zip -y
 
-    - name: Extrair ISO base
+    - name: Extrair ISO
       if: steps.cache-iso.outputs.cache-hit != 'true'
       shell: powershell
       run: |
@@ -60,25 +60,28 @@ jobs:
     - name: Remover ISO
       run: del source.iso
 
-    # ================================
-    # 🔥 BACKUP
-    # ================================
+    # 🔹 BACKUP
     - name: Backup WIM
       run: copy work\sources\install.wim work\sources\install_original.wim
 
     # ================================
-    # 🔥 BAIXAR UUP REAL (PACOTE CERTO)
+    # 🔥 DOWNLOAD UPDATES (LINKS REAIS)
     # ================================
-    - name: Baixar pacote UUP
-      shell: powershell
-      run: |
-        git clone https://github.com/uup-dump/uup-dump.git uup
+    - name: Criar pasta updates
+      run: mkdir updates
 
-    - name: Executar download UUP
+    - name: Baixar updates reais
       shell: powershell
       run: |
-        cd uup
-        cmd /c uup_download_windows.cmd
+        cd updates
+
+        curl.exe -L -o SSU.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/ee9e2a08-c29f-42cb-bdbd-b204ed4b86af"
+        curl.exe -L -o KB1.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/3ae35ada-a348-4a74-8e22-575f8689e441"
+        curl.exe -L -o KB2.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/86594075-c967-4974-a055-5b6db3058d50"
+        curl.exe -L -o KB3.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/17bcecd9-6b16-4c3d-baa8-f678e2a5dba5"
+        curl.exe -L -o KB4.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/62383f9f-8732-4028-a4e8-555b16047b47"
+        curl.exe -L -o KB5.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/5081b4fd-6f6c-49af-8967-bd1d51c19e7f"
+        curl.exe -L -o KB6.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/946714d8-ee36-4571-a5e1-fc6cf8007658"
 
     # ================================
     # 🔥 MOUNT
@@ -86,21 +89,26 @@ jobs:
     - name: Criar mount
       run: mkdir mount
 
-    - name: Montar imagem
+    - name: Montar WIM
       shell: powershell
       run: |
         dism /Mount-Wim /WimFile:work\sources\install.wim /index:1 /MountDir:mount
 
     # ================================
-    # 🔥 INTEGRAR UPDATES
+    # 🔥 INTEGRAR (SSU PRIMEIRO)
     # ================================
-    - name: Integrar updates
+    - name: Integrar SSU
       shell: powershell
       run: |
-        dism /Image:mount /Add-Package /PackagePath:uup
+        dism /Image:mount /Add-Package /PackagePath:updates\SSU.cab
+
+    - name: Integrar resto
+      shell: powershell
+      run: |
+        dism /Image:mount /Add-Package /PackagePath:updates
 
     # ================================
-    # 🔥 CLEAN HARD
+    # 🔥 CLEAN
     # ================================
     - name: Cleanup
       shell: powershell
@@ -115,16 +123,14 @@ jobs:
       run: |
         dism /Unmount-Wim /MountDir:mount /Commit
 
-    # ================================
-    # 🔥 LIMPAR UUP (LIBERAR ESPAÇO)
-    # ================================
-    - name: Limpar UUP
-      run: rmdir /s /q uup
+    # 🔥 LIMPAR UPDATES
+    - name: Limpar updates
+      run: rmdir /s /q updates
 
     # ================================
-    # 🔥 CONVERTER ESD
+    # 🔥 ESD
     # ================================
-    - name: Converter para ESD
+    - name: Converter ESD
       shell: powershell
       run: |
         dism /Export-Image /SourceImageFile:work\sources\install.wim `
@@ -135,7 +141,7 @@ jobs:
         del work\sources\install.wim
 
     # ================================
-    # 🔥 CRIAR ISO
+    # 🔥 ISO
     # ================================
     - name: Instalar ADK
       run: choco install windows-adk -y
@@ -146,9 +152,7 @@ jobs:
         $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
         & $oscdimg -bwork\boot\etfsboot.com -u2 -h -m -o -lLTSC_FINAL work final.iso
 
-    # ================================
     # 🔥 LIMPAR WORK
-    # ================================
     - name: Limpar work
       run: rmdir /s /q work
 
