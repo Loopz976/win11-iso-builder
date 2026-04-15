@@ -22,13 +22,14 @@ jobs:
 
       # 📥 Baixar partes
       - name: Baixar partes
+        shell: powershell
         run: |
-          curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.001" -o C:\work\files.zip.001
-          curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.002" -o C:\work\files.zip.002
-          curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003" -o C:\work\files.zip.003
-          curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004" -o C:\work\files.zip.004
+          curl.exe -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.001" -o C:\work\files.zip.001
+          curl.exe -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.002" -o C:\work\files.zip.002
+          curl.exe -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003" -o C:\work\files.zip.003
+          curl.exe -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004" -o C:\work\files.zip.004
 
-      # 📦 Extrair multipart (automático via .001)
+      # 📦 Extrair multipart
       - name: Extrair pacote
         shell: powershell
         run: |
@@ -38,7 +39,7 @@ jobs:
       - name: Localizar ISO
         shell: powershell
         run: |
-          $iso = Get-ChildItem -Path C:\work\extract -Recurse -Filter *.iso | Select-Object -First 1
+          $iso = Get-ChildItem C:\work\extract -Recurse -Filter *.iso | Select-Object -First 1
           if (-not $iso) { throw "ISO não encontrada" }
           Copy-Item $iso.FullName C:\work\base.iso
 
@@ -60,7 +61,7 @@ jobs:
             throw "install não encontrado"
           }
 
-      # 🔄 Exportar somente PRO (index 4)
+      # 🔄 Exportar PRO (index 4)
       - name: Exportar PRO
         shell: powershell
         run: |
@@ -69,7 +70,7 @@ jobs:
           Remove-Item C:\iso\sources\install.esd -Force -ErrorAction SilentlyContinue
           Rename-Item C:\iso\sources\install_pro.wim install.wim
 
-      # 🧹 LIMPEZA PESADA (resolve erro de espaço)
+      # 🧹 Limpeza pesada (resolve espaço)
       - name: Limpeza pesada
         shell: powershell
         run: |
@@ -78,14 +79,17 @@ jobs:
           Remove-Item C:\work\extract -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item C:\Users\runneradmin\AppData\Local\Temp\* -Recurse -Force -ErrorAction SilentlyContinue
 
-      # 🔽 Baixar oscdimg portátil (SEM ADK)
+      # 🔽 Baixar oscdimg (CORRIGIDO)
       - name: Baixar oscdimg
         shell: powershell
         run: |
-          curl -L "https://github.com/abbodi1406/vcredist/raw/master/bin/oscdimg.exe" -o C:\work\oscdimg.exe
-          if (!(Test-Path "C:\work\oscdimg.exe")) { throw "Falha ao baixar oscdimg" }
+          Invoke-WebRequest -Uri "https://github.com/abbodi1406/vcredist/raw/master/bin/oscdimg.exe" -OutFile "C:\work\oscdimg.exe"
 
-      # 💿 Criar ISO FINAL BOOTÁVEL
+          if (!(Test-Path "C:\work\oscdimg.exe")) {
+            throw "Falha ao baixar oscdimg"
+          }
+
+      # 💿 Criar ISO FINAL
       - name: Criar ISO FINAL
         shell: powershell
         run: |
@@ -96,7 +100,7 @@ jobs:
           C:\iso `
           C:\work\Win11_23H2_Pro_Final.iso
 
-      # 📦 Compactar ISO em partes
+      # 📦 Compactar ISO
       - name: Compactar ISO
         shell: powershell
         run: |
