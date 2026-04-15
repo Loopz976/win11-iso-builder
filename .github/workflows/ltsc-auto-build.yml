@@ -1,177 +1,27 @@
-name: LTSC AUTO BUILD (REAL UUP LINKS + FINAL)
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: windows-2022
-
-    steps:
-
     # ================================
-    # 🔹 CACHE ISO
+    # 🔥 INTEGRAÇÃO CORRETA (ORDEM)
     # ================================
-    - name: Cache ISO
-      id: cache-iso
-      uses: actions/cache@v4
-      with:
-        path: source.iso
-        key: ltsc-iso-v1
 
-    # ================================
-    # 🔥 DOWNLOAD ISO
-    # ================================
-    - name: Baixar ISO
-      if: steps.cache-iso.outputs.cache-hit != 'true'
-      shell: powershell
-      run: |
-        curl.exe -L -o part.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
-        curl.exe -L -o part.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
-        curl.exe -L -o part.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
-
-    - name: Instalar 7zip
-      run: choco install 7zip -y
-
-    - name: Extrair ISO
-      if: steps.cache-iso.outputs.cache-hit != 'true'
-      shell: powershell
-      run: |
-        & "C:\Program Files\7-Zip\7z.exe" x part.7z.001 -aoa
-
-    - name: Padronizar ISO
-      if: steps.cache-iso.outputs.cache-hit != 'true'
-      shell: powershell
-      run: |
-        $iso = Get-ChildItem *.iso | Select-Object -First 1
-        Rename-Item $iso.Name source.iso
-
-    # ================================
-    # 🔥 EXTRAIR ISO
-    # ================================
-    - name: Criar work
-      run: mkdir work
-
-    - name: Extrair ISO
-      shell: powershell
-      run: |
-        & "C:\Program Files\7-Zip\7z.exe" x source.iso -owork -aoa
-
-    - name: Remover ISO
-      run: del source.iso
-
-    # 🔹 BACKUP
-    - name: Backup WIM
-      run: copy work\sources\install.wim work\sources\install_original.wim
-
-    # ================================
-    # 🔥 DOWNLOAD UPDATES (LINKS REAIS)
-    # ================================
-    - name: Criar pasta updates
-      run: mkdir updates
-
-    - name: Baixar updates reais
-      shell: powershell
-      run: |
-        cd updates
-
-        curl.exe -L -o SSU.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/ee9e2a08-c29f-42cb-bdbd-b204ed4b86af"
-        curl.exe -L -o KB1.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/3ae35ada-a348-4a74-8e22-575f8689e441"
-        curl.exe -L -o KB2.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/86594075-c967-4974-a055-5b6db3058d50"
-        curl.exe -L -o KB3.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/17bcecd9-6b16-4c3d-baa8-f678e2a5dba5"
-        curl.exe -L -o KB4.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/62383f9f-8732-4028-a4e8-555b16047b47"
-        curl.exe -L -o KB5.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/5081b4fd-6f6c-49af-8967-bd1d51c19e7f"
-        curl.exe -L -o KB6.cab "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/946714d8-ee36-4571-a5e1-fc6cf8007658"
-
-    # ================================
-    # 🔥 MOUNT
-    # ================================
-    - name: Criar mount
-      run: mkdir mount
-
-    - name: Montar WIM
-      shell: powershell
-      run: |
-        dism /Mount-Wim /WimFile:work\sources\install.wim /index:1 /MountDir:mount
-
-    # ================================
-    # 🔥 INTEGRAR (SSU PRIMEIRO)
-    # ================================
     - name: Integrar SSU
       shell: powershell
       run: |
-        dism /Image:mount /Add-Package /PackagePath:updates\SSU.cab
+        $ssu = Get-ChildItem updates | Where-Object {$_.Name -like "*SSU*"}
+        dism /Image:mount /Add-Package /PackagePath:$ssu.FullName
 
-    - name: Integrar resto
+    - name: Integrar Enablement
       shell: powershell
       run: |
-        dism /Image:mount /Add-Package /PackagePath:updates
+        $en = Get-ChildItem updates | Where-Object {$_.Name -like "*KB5003791*"}
+        dism /Image:mount /Add-Package /PackagePath:$en.FullName
 
-    # ================================
-    # 🔥 CLEAN
-    # ================================
-    - name: Cleanup
+    - name: Integrar restantes
       shell: powershell
       run: |
-        dism /Image:mount /Cleanup-Image /StartComponentCleanup /ResetBase
+        $rest = Get-ChildItem updates | Where-Object {
+          $_.Name -notlike "*SSU*" -and $_.Name -notlike "*KB5003791*"
+        }
 
-    # ================================
-    # 🔥 UNMOUNT
-    # ================================
-    - name: Commit
-      shell: powershell
-      run: |
-        dism /Unmount-Wim /MountDir:mount /Commit
-
-    # 🔥 LIMPAR UPDATES
-    - name: Limpar updates
-      run: rmdir /s /q updates
-
-    # ================================
-    # 🔥 ESD
-    # ================================
-    - name: Converter ESD
-      shell: powershell
-      run: |
-        dism /Export-Image /SourceImageFile:work\sources\install.wim `
-        /SourceIndex:1 `
-        /DestinationImageFile:work\sources\install.esd `
-        /Compress:recovery
-
-        del work\sources\install.wim
-
-    # ================================
-    # 🔥 ISO
-    # ================================
-    - name: Instalar ADK
-      run: choco install windows-adk -y
-
-    - name: Criar ISO
-      shell: powershell
-      run: |
-        $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
-        & $oscdimg -bwork\boot\etfsboot.com -u2 -h -m -o -lLTSC_FINAL work final.iso
-
-    # 🔥 LIMPAR WORK
-    - name: Limpar work
-      run: rmdir /s /q work
-
-    # ================================
-    # 🔥 SPLIT
-    # ================================
-    - name: Split ISO
-      shell: powershell
-      run: |
-        & "C:\Program Files\7-Zip\7z.exe" a split.7z final.iso -v1900m
-
-    - name: Remover ISO
-      run: del final.iso
-
-    # ================================
-    # 📦 UPLOAD
-    # ================================
-    - name: Upload
-      uses: actions/upload-artifact@v4
-      with:
-        name: LTSC-FINAL
-        path: split.7z.*
+        foreach ($pkg in $rest) {
+          Write-Host "Integrando $($pkg.Name)"
+          dism /Image:mount /Add-Package /PackagePath:$pkg.FullName
+        }
