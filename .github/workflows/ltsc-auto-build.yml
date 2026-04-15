@@ -1,4 +1,4 @@
-name: BUILD ISO LTSC FINAL (AUTO + DEBUG)
+name: BUILD ISO LTSC FINAL (SAFE)
 
 on:
   workflow_dispatch:
@@ -8,120 +8,133 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # 1. Base
       - uses: actions/checkout@v4
 
+      # BASE
       - name: Criar estrutura
+        shell: powershell
         run: |
-          mkdir C:\Files
-          mkdir C:\Files\ISO
-          mkdir work
+          New-Item -ItemType Directory -Force -Path C:\Files | Out-Null
+          New-Item -ItemType Directory -Force -Path work | Out-Null
 
-      # 2. ISO
+      # ISO
       - name: Baixar ISO
+        shell: powershell
         run: |
-          cd work
+          Set-Location work
           curl -L -o W10LTSC2021.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
           curl -L -o W10LTSC2021.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
           curl -L -o W10LTSC2021.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
       - name: Extrair ISO
+        shell: powershell
         run: |
-          cd work
+          Set-Location work
           7z x W10LTSC2021.7z.001 -oiso
 
       - name: Mover ISO
+        shell: powershell
         run: |
-          move work\iso\*.iso C:\Files\
+          $iso = Get-ChildItem work\iso\*.iso | Select-Object -First 1
+          Move-Item $iso.FullName C:\Files\ -Force
 
-      - name: Extrair ISO base
-        run: |
-          $iso = Get-ChildItem C:\Files\*.iso | Select-Object -First 1
-          7z x $iso.FullName -oC:\Files\ISO
-
-      - name: Limpeza ISO
+      - name: Limpar partes
+        shell: powershell
         run: |
           Remove-Item work\W10LTSC2021.7z.* -Force -ErrorAction SilentlyContinue
-          Remove-Item C:\Files\*.iso -Force
 
-      # 3. W10UI
+      # W10UI
       - name: Baixar W10UI
+        shell: powershell
         run: |
-          cd work
+          Set-Location work
           curl -L -o W10UI.zip https://tiny.cc/W10UI
 
       - name: Extrair W10UI
+        shell: powershell
         run: |
           7z x work\W10UI.zip -oC:\Files
 
       - name: Limpar zip
+        shell: powershell
         run: |
           Remove-Item work\W10UI.zip -Force
 
-      # 4. DRIVER
+      # DRIVER
       - name: Baixar driver NVIDIA
+        shell: powershell
         run: |
-          cd work
+          Set-Location work
           curl -L -o nvidia.exe https://us.download.nvidia.com/Windows/341.92/341.92-desktop-win10-64bit-international.exe
 
       - name: Extrair driver
+        shell: powershell
         run: |
           7z x work\nvidia.exe -owork\nvidia
 
-      - name: Copiar Display.Driver
+      - name: Copiar driver
+        shell: powershell
         run: |
-          xcopy /E /I /Y work\nvidia\Display.Driver C:\Files\Drivers\OS\Display.Driver
+          $dest = "C:\Files\Drivers\OS"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Copy-Item "work\nvidia\Display.Driver" -Destination $dest -Recurse -Force
 
       - name: Limpar driver
+        shell: powershell
         run: |
           Remove-Item work\nvidia -Recurse -Force
           Remove-Item work\nvidia.exe -Force
 
-      # 5. Updates
-      - name: Preparar updates
+      # INI (SEM BLOCO MULTILINHA)
+      - name: Criar W10UI.ini
+        shell: powershell
         run: |
-          echo coloque_updates_aqui > C:\Files\UPDATE_PLACEHOLDER.txt
+          $iso = (Get-ChildItem C:\Files\*.iso | Select-Object -First 1).FullName
+          $iniPath = "C:\Files\W10UI.ini"
 
-      # 6. INI
-      - name: Configurar W10UI
+          Set-Content $iniPath "[W10UI-Configuration]"
+          Add-Content $iniPath "ISO=1"
+          Add-Content $iniPath "ISODir=$iso"
+          Add-Content $iniPath ""
+          Add-Content $iniPath "AutoStart=1"
+          Add-Content $iniPath "AddUpdates=1"
+          Add-Content $iniPath "AddDrivers=1"
+          Add-Content $iniPath ""
+          Add-Content $iniPath "Cleanup=1"
+          Add-Content $iniPath "ResetBase=1"
+          Add-Content $iniPath ""
+          Add-Content $iniPath "Net35=1"
+          Add-Content $iniPath "wim2esd=1"
+          Add-Content $iniPath ""
+          Add-Content $iniPath "Drv_Source=\Drivers"
+
+      # DEBUG
+      - name: Verificar estrutura
+        shell: powershell
         run: |
-          echo [W10UI] > C:\Files\W10UI.ini
-          echo AutoStart=1 >> C:\Files\W10UI.ini
-          echo AddUpdates=1 >> C:\Files\W10UI.ini
-          echo AddDrivers=1 >> C:\Files\W10UI.ini
-          echo Cleanup=1 >> C:\Files\W10UI.ini
-          echo ResetBase=1 >> C:\Files\W10UI.ini
-          echo NetFx3=1 >> C:\Files\W10UI.ini
-          echo StartVirtual=0 >> C:\Files\W10UI.ini
-          echo wim2esd=1 >> C:\Files\W10UI.ini
-          echo SkipISO=0 >> C:\Files\W10UI.ini
-          echo Target=C:\Files\ISO >> C:\Files\W10UI.ini
+          Write-Host "FILES:"
+          Get-ChildItem C:\Files
+          Write-Host "DRIVERS:"
+          Get-ChildItem C:\Files\Drivers\OS
 
-      # 🔎 DEBUG ESTRUTURA (IMPORTANTE)
-      - name: Verificar estrutura Files
-        run: |
-          echo ===== LISTAGEM C:\Files =====
-          dir C:\Files
-          echo ===== ISO =====
-          dir C:\Files\ISO
-          echo ===== DRIVERS =====
-          dir C:\Files\Drivers\OS
-
-      # 7. EXECUÇÃO AUTOMÁTICA (FIX FINAL)
+      # EXECUÇÃO
       - name: Executar W10UI
+        shell: powershell
         run: |
-          cd C:\Files
+          Set-Location C:\Files
           cmd /c W10UI.cmd
 
-      # 8. OUTPUT
-      - name: Organizar saída
+      # OUTPUT
+      - name: Organizar ISO
+        shell: powershell
         run: |
-          mkdir output
-          move C:\Files\*.iso output\
+          New-Item -ItemType Directory -Force -Path output | Out-Null
+          Move-Item C:\Files\*.iso output\ -Force
 
       - name: Compactar ISO
+        shell: powershell
         run: |
-          cd output
+          Set-Location output
           7z a -v1900m FINAL_LTSC.7z *.iso
 
       - name: Upload
