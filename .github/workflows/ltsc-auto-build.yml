@@ -1,4 +1,4 @@
-name: BUILD ISO LTSC FINAL (TARGET CORRETO)
+name: BUILD ISO LTSC FINAL (7ZIP FULL FLOW)
 
 on:
   workflow_dispatch:
@@ -11,14 +11,14 @@ jobs:
       # 1. Checkout
       - uses: actions/checkout@v4
 
-      # 2. Estrutura
+      # 2. Criar estrutura (RAIZ FILES)
       - name: Criar estrutura
         run: |
+          mkdir C:\files
+          mkdir C:\files\base
           mkdir work
-          mkdir work\files
-          mkdir work\files\base
 
-      # 3. Download ISO (3 partes)
+      # 3. Baixar ISO (3 partes)
       - name: Baixar ISO
         run: |
           cd work
@@ -26,21 +26,21 @@ jobs:
           curl -L -o W10LTSC2021.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
           curl -L -o W10LTSC2021.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
-      # 4. Extrair ISO (merge automático)
-      - name: Extrair ISO
+      # 4. Extrair ISO com 7zip (UNE PARTES)
+      - name: Extrair ISO (7zip)
         run: |
           cd work
           7z x W10LTSC2021.7z.001 -oiso
 
-      # 5. Copiar ISO original (sem renomear)
+      # 5. Copiar ISO ORIGINAL para C:\files
       - name: Copiar ISO
         run: |
-          move work\iso\*.iso work\files\
+          move work\iso\*.iso C:\files\
 
-      # 6. Extrair ISO → files\base (TARGET REAL)
-      - name: Extrair ISO para base
+      # 6. Extrair ISO para C:\files\base (7ZIP OBRIGATÓRIO)
+      - name: Extrair ISO base
         run: |
-          for %%f in (work\files\*.iso) do 7z x "%%f" -owork\files\base
+          for %%f in (C:\files\*.iso) do 7z x "%%f" -oC:\files\base
 
       # 7. Limpar partes ISO
       - name: Limpar partes
@@ -50,7 +50,7 @@ jobs:
       # 8. Remover ISO original
       - name: Remover ISO
         run: |
-          Remove-Item work\files\*.iso -Force
+          Remove-Item C:\files\*.iso -Force
 
       # 9. Baixar W10UI
       - name: Baixar W10UI
@@ -58,10 +58,10 @@ jobs:
           cd work
           curl -L -o W10UI.zip https://tiny.cc/W10UI
 
-      # 10. Extrair W10UI na raiz files
+      # 10. Extrair W10UI na RAIZ C:\files
       - name: Extrair W10UI
         run: |
-          7z x work\W10UI.zip -owork\files\
+          7z x work\W10UI.zip -oC:\files
 
       # 11. Limpar zip
       - name: Limpar zip
@@ -74,16 +74,16 @@ jobs:
           cd work
           curl -L -o nvidia.exe https://us.download.nvidia.com/Windows/341.92/341.92-desktop-win10-64bit-international.exe
 
-      # 13. Extrair driver com 7zip
+      # 13. Extrair driver com 7ZIP (OBRIGATÓRIO)
       - name: Extrair driver
         run: |
           7z x work\nvidia.exe -owork\nvidia
 
-      # 14. Copiar Display.Driver → Drivers\OS
+      # 14. Copiar Display.Driver → C:\files\Drivers\OS
       - name: Preparar driver
         run: |
-          mkdir work\files\Drivers\OS
-          xcopy /E /I /Y work\nvidia\Display.Driver work\files\Drivers\OS\Display.Driver
+          mkdir C:\files\Drivers\OS
+          xcopy /E /I /Y work\nvidia\Display.Driver C:\files\Drivers\OS\Display.Driver
 
       # 15. Limpar driver temp
       - name: Limpar driver
@@ -91,41 +91,39 @@ jobs:
           Remove-Item work\nvidia -Recurse -Force
           Remove-Item work\nvidia.exe -Force
 
-      # 16. Updates (coloque os reais depois)
+      # 16. Updates (SOLTOS NA RAIZ FILES)
       - name: Preparar updates
         run: |
-          mkdir work\files\updates
-          echo coloque_updates_aqui > work\files\updates\readme.txt
+          echo coloque_updates_aqui > C:\files\UPDATE_PLACEHOLDER.txt
 
-      # 17. Criar W10UI.ini (TARGET DEFINITIVO)
-      - name: Configurar W10UI
+      # 17. Configurar W10UI.ini (TARGET CORRETO)
+      - name: Criar ini
         run: |
-          echo [W10UI] > work\files\W10UI.ini
-          echo AutoStart=1 >> work\files\W10UI.ini
-          echo AddUpdates=1 >> work\files\W10UI.ini
-          echo AddDrivers=1 >> work\files\W10UI.ini
-          echo Cleanup=1 >> work\files\W10UI.ini
-          echo ResetBase=1 >> work\files\W10UI.ini
-          echo NetFx3=1 >> work\files\W10UI.ini
-          echo StartVirtual=0 >> work\files\W10UI.ini
-          echo wim2esd=1 >> work\files\W10UI.ini
-          echo SkipISO=0 >> work\files\W10UI.ini
-          echo Target=.\base >> work\files\W10UI.ini
+          echo [W10UI] > C:\files\W10UI.ini
+          echo AutoStart=1 >> C:\files\W10UI.ini
+          echo AddUpdates=1 >> C:\files\W10UI.ini
+          echo AddDrivers=1 >> C:\files\W10UI.ini
+          echo Cleanup=1 >> C:\files\W10UI.ini
+          echo ResetBase=1 >> C:\files\W10UI.ini
+          echo NetFx3=1 >> C:\files\W10UI.ini
+          echo StartVirtual=0 >> C:\files\W10UI.ini
+          echo wim2esd=1 >> C:\files\W10UI.ini
+          echo SkipISO=0 >> C:\files\W10UI.ini
+          echo Target=C:\files\base >> C:\files\W10UI.ini
 
       # 18. Executar W10UI
       - name: Executar W10UI
         run: |
-          cd work\files
-          echo === EXECUTANDO W10UI ===
+          cd C:\files
           call W10UI.cmd
 
-      # 19. Organizar ISO final
-      - name: Organizar saída
+      # 19. Organizar saída
+      - name: Organizar ISO final
         run: |
           mkdir output
-          move work\files\*.iso output\
+          move C:\files\*.iso output\
 
-      # 20. Compactar ISO (1900MB)
+      # 20. Compactar com 7ZIP (OBRIGATÓRIO)
       - name: Compactar ISO
         run: |
           cd output
