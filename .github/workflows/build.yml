@@ -14,18 +14,24 @@ jobs:
           mkdir C:\work
           mkdir C:\work\iso\sources
 
-      # 📥 Baixar ESD (BITS - robusto)
+      # 📥 Baixar ESD PRO (curl - estável)
       - name: Baixar ESD PRO
         shell: powershell
         run: |
           $url = "https://dl.delivery.mp.microsoft.com/filestreamingservice/files/1ae4a20e-24d5-43f0-bcdd-b7d7e6b72864/22631.2861.231204-0538.23H2_NI_RELEASE_SVC_REFRESH_CLIENTCONSUMER_RET_x64FRE_pt-br.esd"
-          $dest = "C:\work\install.esd"
+          $output = "C:\work\install.esd"
 
-          Start-BitsTransfer -Source $url -Destination $dest
+          curl.exe -L $url -o $output
 
-          if (!(Test-Path $dest)) {
+          if (!(Test-Path $output)) {
             throw "Download falhou"
           }
+
+          if ((Get-Item $output).Length -lt 100MB) {
+            throw "Download incompleto"
+          }
+
+          Write-Output "Download concluído"
 
       # 🔍 Detectar index PRO
       - name: Detectar index PRO
@@ -33,6 +39,11 @@ jobs:
         run: |
           $info = dism /Get-WimInfo /WimFile:C:\work\install.esd
           $pro = ($info | Select-String "Professional" | Select-Object -First 1)
+
+          if (-not $pro) {
+            throw "Não encontrou edição Professional"
+          }
+
           $index = ($pro -split ":")[0] -replace "[^0-9]"
           echo "INDEX=$index" >> $env:GITHUB_ENV
 
@@ -41,19 +52,19 @@ jobs:
         run: |
           dism /Export-Image /SourceImageFile:C:\work\install.esd /SourceIndex:$env:INDEX /DestinationImageFile:C:\work\iso\sources\install.wim /Compress:max
 
-      # 🔧 Instalar ADK
+      # 🔧 Instalar ADK (oscdimg)
       - name: Instalar ADK
         run: |
           Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2196224" -OutFile C:\work\adk.exe
           Start-Process C:\work\adk.exe -ArgumentList "/quiet /norestart /features OptionId.DeploymentTools" -Wait
 
-      # 💿 Criar ISO base
+      # 💿 Criar ISO BASE
       - name: Criar ISO BASE
         run: |
           $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
           & $oscdimg -u2 -h -m -lWIN11_23H2_PRO_BASE C:\work\iso C:\work\win11_pro_base.iso
 
-      # 📤 Upload
+      # 📤 Upload no Releases
       - name: Upload Release
         uses: softprops/action-gh-release@v1
         with:
