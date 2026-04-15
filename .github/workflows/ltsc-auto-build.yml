@@ -1,4 +1,4 @@
-name: LTSC AUTO BUILD (Base + Prepare)
+name: LTSC AUTO BUILD (Base + Prepare + Mount)
 
 on:
   workflow_dispatch:
@@ -63,7 +63,7 @@ jobs:
           exit 1
         }
 
-    # 🔹 EXTRAIR ISO PARA PASTA (FORMA CORRETA)
+    # 🔹 EXTRAIR ISO PARA PASTA
     - name: Criar pasta base
       run: mkdir work
 
@@ -86,5 +86,30 @@ jobs:
           Write-Host "Base pronta para integração"
         } else {
           Write-Error "install.wim não encontrado"
+          exit 1
+        }
+
+    # ================================
+    # 🔥 NOVO BLOCO - MONTAGEM DO WIM
+    # ================================
+
+    # 🔹 CRIAR PASTA DE MONTAGEM
+    - name: Criar pasta mount
+      run: mkdir mount
+
+    # 🔹 MONTAR INSTALL.WIM
+    - name: Montar imagem
+      shell: powershell
+      run: |
+        dism /Mount-Wim /WimFile:work\sources\install.wim /index:1 /MountDir:mount
+
+    # 🔹 VALIDAR MONTAGEM
+    - name: Validar montagem
+      shell: powershell
+      run: |
+        if (Test-Path "mount\Windows") {
+          Write-Host "Imagem montada com sucesso"
+        } else {
+          Write-Error "Falha ao montar imagem"
           exit 1
         }
