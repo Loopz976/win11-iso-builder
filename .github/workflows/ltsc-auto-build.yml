@@ -1,4 +1,4 @@
-name: LTSC AUTO BUILD (FINAL ENTERPRISE)
+name: LTSC AUTO BUILD (FINAL W10UI)
 
 on:
   workflow_dispatch:
@@ -60,10 +60,6 @@ jobs:
     - name: Remover ISO
       run: del source.iso
 
-    # 🔹 BACKUP
-    - name: Backup WIM
-      run: copy work\sources\install.wim work\sources\install_original.wim
-
     # ================================
     # 🔥 BAIXAR HTML UUP
     # ================================
@@ -91,62 +87,49 @@ jobs:
         }
 
     # ================================
-    # 🔥 MOUNT
+    # 🔥 BAIXAR W10UI
     # ================================
-    - name: Criar mount
-      run: mkdir mount
+    - name: Baixar W10UI
+      run: |
+        git clone https://github.com/abbodi1406/WHD-Windows-Update.git W10UI
 
-    - name: Montar WIM
+    # ================================
+    # 🔥 PREPARAR UPDATES
+    # ================================
+    - name: Preparar updates
       shell: powershell
       run: |
-        dism /Mount-Wim /WimFile:work\sources\install.wim /index:1 /MountDir:mount
+        mkdir W10UI\Updates
+        Copy-Item updates\*.cab W10UI\Updates\
 
     # ================================
-    # 🔥 INTEGRAÇÃO ORDENADA
+    # 🔥 CONFIGURAR W10UI.ini
     # ================================
-    - name: Integrar SSU
+    - name: Configurar W10UI
       shell: powershell
       run: |
-        $ssu = Get-ChildItem updates | Where-Object {$_.Name -like "*SSU*"}
-        dism /Image:mount /Add-Package /PackagePath:$ssu.FullName
+        Set-Content W10UI\W10UI.ini @"
+AutoStart=1
+Cleanup=1
+ResetBase=1
+NetFx3=0
+LCUwinre=1
+WinRE=1
+"@
 
-    - name: Integrar Enablement
+    # ================================
+    # 🔥 RODAR W10UI
+    # ================================
+    - name: Integrar updates (W10UI)
       shell: powershell
       run: |
-        $en = Get-ChildItem updates | Where-Object {$_.Name -like "*KB5003791*"}
-        dism /Image:mount /Add-Package /PackagePath:$en.FullName
-
-    - name: Integrar restantes
-      shell: powershell
-      run: |
-        $rest = Get-ChildItem updates | Where-Object {
-          $_.Name -notlike "*SSU*" -and $_.Name -notlike "*KB5003791*"
-        }
-
-        foreach ($pkg in $rest) {
-          dism /Image:mount /Add-Package /PackagePath:$pkg.FullName
-        }
+        cd W10UI
+        cmd /c W10UI.cmd "..\work\sources\install.wim"
 
     # ================================
-    # 🔥 CLEAN
+    # 🔥 VALIDAR BUILD
     # ================================
-    - name: Cleanup
-      shell: powershell
-      run: |
-        dism /Image:mount /Cleanup-Image /StartComponentCleanup /ResetBase
-
-    # ================================
-    # 🔥 UNMOUNT
-    # ================================
-    - name: Commit
-      shell: powershell
-      run: |
-        dism /Unmount-Wim /MountDir:mount /Commit
-
-    # ================================
-    # 🔥 VALIDAR + CAPTURAR VERSÃO
-    # ================================
-    - name: Validar versão e capturar build
+    - name: Validar versão
       id: version
       shell: powershell
       run: |
@@ -159,6 +142,8 @@ jobs:
         $ubr = (Get-ItemProperty "HKLM:\OFFSOFT\Microsoft\Windows NT\CurrentVersion").UBR
 
         $full = "$build.$ubr"
+        Write-Host "VERSÃO FINAL: $full"
+
         echo "version=$full" >> $env:GITHUB_OUTPUT
 
         if ($ubr -lt 7184) {
@@ -169,9 +154,13 @@ jobs:
         reg unload HKLM\OFFSOFT
         dism /Unmount-Wim /MountDir:verify /Discard
 
-    # 🔥 LIMPAR UPDATES
-    - name: Limpar updates
-      run: rmdir /s /q updates
+    # ================================
+    # 🔥 LIMPAR
+    # ================================
+    - name: Limpar temporários
+      run: |
+        rmdir /s /q updates
+        rmdir /s /q W10UI
 
     # ================================
     # 🔥 ESD
@@ -187,7 +176,7 @@ jobs:
         del work\sources\install.wim
 
     # ================================
-    # 🔥 ISO COM NOME DINÂMICO
+    # 🔥 ISO
     # ================================
     - name: Instalar ADK
       run: choco install windows-adk -y
@@ -196,14 +185,15 @@ jobs:
       shell: powershell
       run: |
         $ver = "${{ steps.version.outputs.version }}"
-        $label = "WIN10_LTSC_$ver"
         $isoName = "Windows 10 LTSC 21H2 ($ver).iso"
 
         $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
 
-        & $oscdimg -bwork\boot\etfsboot.com -u2 -h -m -o -l$label work "$isoName"
+        & $oscdimg -bwork\boot\etfsboot.com -u2 -h -m -o -lWIN10_LTSC work "$isoName"
 
+    # ================================
     # 🔥 LIMPAR WORK
+    # ================================
     - name: Limpar work
       run: rmdir /s /q work
 
