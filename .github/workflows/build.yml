@@ -1,4 +1,4 @@
-name: Build Windows 11 23H2 PRO ISO (Base Clean)
+name: Build Windows 11 23H2 PRO ISO (Final Split)
 
 on:
   workflow_dispatch:
@@ -23,21 +23,17 @@ jobs:
           curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.003" -o C:\work\files.zip.003
           curl -L "https://github.com/Loopz976/win10-iso-auto-builder/releases/download/files-win11/filesw11.zip.004" -o C:\work\files.zip.004
 
-      # 🔗 Juntar ZIP
-      - name: Juntar arquivos
+      # 📦 Extrair com 7zip
+      - name: Extrair com 7zip
         run: |
-          copy /b C:\work\files.zip.001 + C:\work\files.zip.002 + C:\work\files.zip.003 + C:\work\files.zip.004 C:\work\files.zip
+          "C:\Program Files\7-Zip\7z.exe" x C:\work\files.zip.001 -oC:\work\extract -y
 
-      # 📦 Extrair ZIP
-      - name: Extrair
-        run: |
-          Expand-Archive C:\work\files.zip -DestinationPath C:\work\extract
-
-      # 🔍 Encontrar ISO
+      # 🔍 Localizar ISO
       - name: Localizar ISO
         shell: powershell
         run: |
           $iso = Get-ChildItem -Path C:\work\extract -Recurse -Filter *.iso | Select-Object -First 1
+          if (-not $iso) { throw "ISO não encontrada" }
           Copy-Item $iso.FullName C:\work\base.iso
 
       # 💿 Montar ISO
@@ -45,11 +41,11 @@ jobs:
         run: Mount-DiskImage -ImagePath C:\work\base.iso
 
       # 📂 Copiar conteúdo
-      - name: Copiar arquivos ISO
+      - name: Copiar conteúdo ISO
         run: robocopy D:\ C:\iso /E
 
-      # 🔄 Exportar somente PRO (index 4)
-      - name: Manter apenas PRO
+      # 🔄 Exportar apenas PRO (index 4)
+      - name: Manter PRO
         run: |
           dism /Export-Image /SourceImageFile:C:\iso\sources\install.wim /SourceIndex:4 /DestinationImageFile:C:\iso\sources\install2.wim /Compress:max
 
@@ -64,22 +60,31 @@ jobs:
           Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2196224" -OutFile C:\work\adk.exe
           Start-Process C:\work\adk.exe -ArgumentList "/quiet /norestart /features OptionId.DeploymentTools" -Wait
 
-      # 💿 Criar ISO final
+      # 💿 Criar ISO FINAL
       - name: Criar ISO FINAL
         run: |
           $oscdimg = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
-          & $oscdimg -bC:\iso\boot\etfsboot.com -u2 -h -m -lWIN11_23H2_PRO_CLEAN C:\iso C:\work\Win11_23H2_Pro_Clean.iso
+          & $oscdimg -bC:\iso\boot\etfsboot.com -u2 -h -m -lWIN11_23H2_PRO_FINAL C:\iso C:\work\Win11_23H2_Pro_Final.iso
 
-      # 📤 Upload Release
-      - name: Upload
+      # 📦 Compactar em partes 1900MB
+      - name: Compactar ISO (split)
+        run: |
+          "C:\Program Files\7-Zip\7z.exe" a -tzip C:\work\Win11_23H2_Pro_Final.zip C:\work\Win11_23H2_Pro_Final.iso -v1900m
+
+      # 📤 Upload partes
+      - name: Upload Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: win11-23h2-pro-clean
-          name: Windows 11 23H2 Pro Clean ISO
+          tag_name: win11-23h2-pro-final
+          name: Windows 11 23H2 Pro Final ISO (Split)
           body: |
-            Windows 11 23H2 Pro Clean ISO
+            Windows 11 23H2 Pro Final ISO
 
             - Edition: Professional (Index 4)
-            - Source: Original untouched ISO
-            - Clean and ready for customization
-          files: C:\work\Win11_23H2_Pro_Clean.iso
+            - Fully clean base
+            - Split in 1900MB parts
+            - Ready for customization
+
+            Extract with 7-Zip (start from .zip.001)
+          files: |
+            C:\work\Win11_23H2_Pro_Final.zip.*
