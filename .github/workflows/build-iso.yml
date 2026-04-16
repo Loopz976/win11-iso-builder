@@ -1,4 +1,4 @@
-name: Windows 11 Pro ISO (FINAL SEM BLOQUEIO)
+name: Windows UUP Auto (SCRIPT FIXADO)
 
 on:
   workflow_dispatch:
@@ -10,57 +10,50 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    # 1. Baixar pacote oficial direto do UUP dump (NÃO bloqueia)
-    - name: Baixar pacote UUP
+    # 1. Baixar script completo
+    - name: Baixar script multi
       run: |
-        curl -L -o uup.zip "https://github.com/uup-dump/uup-dump/releases/latest/download/uupdump.zip"
-        powershell -Command "Expand-Archive uup.zip -DestinationPath uup"
+        curl -L -o build.cmd "https://uup.rg-adguard.net/api/GetFiles?id=59fd22e9-ef3d-4734-8a78-4354718ad854&lang=pt-br&edition=professional&script=yes"
 
-    # 2. Baixar arquivos oficiais da Microsoft
-    - name: Download UUP (oficial)
+    # 2. Baixar binários necessários
+    - name: Baixar bin
+      run: |
+        mkdir bin
+        curl -L -o bin/aria2c.exe https://uup.rg-adguard.net/dl/aria2/aria2c_x86.exe
+
+    # 3. FORÇAR CONFIGURAÇÃO AUTOMÁTICA
+    - name: Patch automático no script
+      shell: powershell
+      run: |
+        (Get-Content build.cmd) `
+        -replace 'set update_en=OFF','set update_en=ON' `
+        -replace 'set clean_en=OFF','set clean_en=ON' `
+        -replace 'set esd_en=OFF','set esd_en=ON' `
+        -replace 'set NetFx_en=OFF','set NetFx_en=OFF' `
+        -replace 'set Lang_en=OFF','set Lang_en=OFF' `
+        | Set-Content build_fixed.cmd
+
+    # 4. Remover menu interativo
+    - name: Remover menu
+      shell: powershell
+      run: |
+        (Get-Content build_fixed.cmd) `
+        -replace ':Menu[\s\S]*:DownListLang', ':DownListLang' `
+        | Set-Content final.cmd
+
+    # 5. Rodar script
+    - name: Executar build
       shell: cmd
       run: |
-        cd uup
-        call uup_download_windows.cmd
+        call final.cmd
 
-    # 3. Configurar compressão máxima
-    - name: Configurar ESD MAX
-      shell: cmd
-      run: |
-        cd uup
-        echo set AutoStart=1>>ConvertConfig.ini
-        echo set Cleanup=1>>ConvertConfig.ini
-        echo set ResetBase=1>>ConvertConfig.ini
-        echo set wim2esd=1>>ConvertConfig.ini
-        echo set esdcompress=LZMS>>ConvertConfig.ini
-
-    # 4. Converter
-    - name: Converter ISO + ESD
-      shell: cmd
-      run: |
-        cd uup
-        call convert-UUP.cmd
-
-    # 5. Copiar ESD
-    - name: Preparar saída
-      shell: cmd
-      run: |
-        mkdir final
-        copy uup\ISO\sources\install.esd final\install.esd
-
-    # 6. Split
-    - name: Split 1900MB
-      shell: bash
-      run: |
-        mkdir split
-        split -b 1900M final/install.esd split/install.esd.part-
-
-    # 7. Upload
+    # 6. Upload (se gerar)
     - name: Upload Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: win11-pro-final-ok
-        name: Windows 11 Pro (ESD MAX OK)
-        files: split/*
+        tag_name: win11-pro-auto
+        name: Windows 11 Pro (AUTO BUILD)
+        files: |
+          uup/**/*.iso
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
