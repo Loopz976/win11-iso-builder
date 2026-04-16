@@ -1,0 +1,56 @@
+name: WINDOWS PRO ISO AUTO (ESD MAX)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Baixar pacote UUP (PRO ONLY)
+      shell: cmd
+      run: |
+        curl -L -o uup.zip "https://uupdump.net/download.php?id=59fd22e9-ef3d-4734-8a78-4354718ad854&pack=pt-br&edition=professional&build=22631.6936"
+        powershell -Command "Expand-Archive uup.zip -DestinationPath uup"
+
+    - name: Configurar conversão máxima
+      shell: cmd
+      run: |
+        cd uup
+        echo set AutoStart=1>>ConvertConfig.ini
+        echo set Cleanup=1>>ConvertConfig.ini
+        echo set ResetBase=1>>ConvertConfig.ini
+        echo set NetFx3=0>>ConvertConfig.ini
+        echo set StartVirtual=0>>ConvertConfig.ini
+        echo set wim2esd=1>>ConvertConfig.ini
+        echo set esdcompress=LZMS>>ConvertConfig.ini
+
+    - name: Converter UUP → ISO (PRO + ESD MAX)
+      shell: cmd
+      run: |
+        cd uup
+        call convert-UUP.cmd
+
+    - name: Copiar install.esd
+      shell: cmd
+      run: |
+        mkdir final
+        copy uup\ISO\sources\install.esd final\install.esd
+
+    - name: Dividir em partes 1900MB
+      shell: bash
+      run: |
+        mkdir split
+        split -b 1900M final/install.esd split/install.esd.part-
+
+    - name: Upload Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: windows-pro-auto
+        name: Windows 11 Pro (ESD MAX AUTO)
+        files: split/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
