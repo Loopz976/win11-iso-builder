@@ -1,4 +1,4 @@
-name: Windows Pro ISO Auto Build (FINAL 100%)
+name: Windows 11 Pro ISO Auto (FINAL DEFINITIVO)
 
 on:
   workflow_dispatch:
@@ -10,58 +10,75 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    # 1. Baixar pacote oficial correto
-    - name: Baixar pacote UUP (estável)
-      shell: cmd
-      run: |
-        curl -L -o uup.zip "https://uupdump.net/download.php?id=59fd22e9-ef3d-4734-8a78-4354718ad854&pack=pt-br&edition=professional"
-        powershell -Command "Expand-Archive uup.zip -DestinationPath uup"
+    # 1. Instalar aria2
+    - name: Instalar aria2
+      run: choco install aria2 -y
 
-    # 2. Rodar download corretamente (script interno correto)
-    - name: Baixar arquivos UUP
-      shell: cmd
+    # 2. Baixar lista UUP (Pro)
+    - name: Obter links UUP
+      shell: powershell
       run: |
-        cd uup
-        call aria2_download_windows.cmd
+        $url = "https://uup.rg-adguard.net/api/GetFiles?id=59fd22e9-ef3d-4734-8a78-4354718ad854&lang=pt-br&edition=professional&txt=yes"
+        Invoke-WebRequest $url -OutFile uup.txt
 
-    # 3. Configurar compressão máxima
-    - name: Configurar ESD máximo
+    # 3. Download via aria2 (rápido e estável)
+    - name: Download UUP
+      run: |
+        aria2c -x16 -s16 -j5 -c -i uup.txt -d uup
+
+    # 4. Baixar conversor oficial
+    - name: Baixar converter
+      run: |
+        curl -L -o convert.zip https://github.com/uup-dump/converter/archive/refs/heads/master.zip
+        powershell -Command "Expand-Archive convert.zip -DestinationPath convert"
+
+    # 5. Preparar estrutura correta
+    - name: Preparar ambiente
+      run: |
+        mkdir work
+        xcopy uup work /E /I /Y
+        xcopy convert\converter-master\* work /E /I /Y
+
+    # 6. Configurar compressão máxima
+    - name: Configurar ESD MAX
       shell: cmd
       run: |
-        cd uup
+        cd work
         echo set AutoStart=1>>ConvertConfig.ini
         echo set Cleanup=1>>ConvertConfig.ini
         echo set ResetBase=1>>ConvertConfig.ini
+        echo set NetFx3=0>>ConvertConfig.ini
+        echo set StartVirtual=0>>ConvertConfig.ini
         echo set wim2esd=1>>ConvertConfig.ini
         echo set esdcompress=LZMS>>ConvertConfig.ini
 
-    # 4. Converter
+    # 7. Converter (gera ISO + install.esd máximo)
     - name: Converter ISO + ESD
       shell: cmd
       run: |
-        cd uup
+        cd work
         call convert-UUP.cmd
 
-    # 5. Copiar ESD
-    - name: Copiar install.esd
+    # 8. Copiar ESD final
+    - name: Preparar saída
       shell: cmd
       run: |
         mkdir final
-        copy uup\ISO\sources\install.esd final\install.esd
+        copy work\ISO\sources\install.esd final\install.esd
 
-    # 6. Split
+    # 9. Dividir em partes (1900MB)
     - name: Split 1900MB
       shell: bash
       run: |
         mkdir split
         split -b 1900M final/install.esd split/install.esd.part-
 
-    # 7. Upload
+    # 10. Upload Release
     - name: Upload Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: win11-pro-final-100
-        name: Windows 11 Pro (ESD MAX FINAL 100%)
+        tag_name: win11-pro-final
+        name: Windows 11 Pro (ESD MAX FINAL)
         files: split/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
