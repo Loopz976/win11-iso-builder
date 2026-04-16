@@ -1,4 +1,4 @@
-name: Windows Pro ISO Auto Build (ESD MAX)
+name: Windows Pro ISO Auto Build (FIXED)
 
 on:
   workflow_dispatch:
@@ -8,44 +8,46 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    - name: Definir variáveis
+    - name: Baixar script UUP (completo)
       shell: cmd
       run: |
-        echo BUILD_ID=59fd22e9-ef3d-4734-8a78-4354718ad854>>%GITHUB_ENV%
-        echo BUILD_VER=22631.6936>>%GITHUB_ENV%
+        curl -L -o uup.cmd "https://uup.rg-adguard.net/api/GetFiles?id=59fd22e9-ef3d-4734-8a78-4354718ad854&lang=pt-br&edition=professional&script=yes"
 
-    - name: Baixar pacote UUP (PRO)
+    - name: Baixar aria2
       shell: cmd
       run: |
-        curl -L -o uup.zip "https://uupdump.net/download.php?id=%BUILD_ID%&pack=pt-br&edition=professional"
-        powershell -Command "Expand-Archive uup.zip -DestinationPath uup"
+        curl -L -o aria2.zip https://uup.rg-adguard.net/dl/aria2_install.zip
+        powershell -Command "Expand-Archive aria2.zip -DestinationPath aria2"
+        copy aria2\aria2c.exe .
 
-    - name: Configurar conversão (ESD máximo)
+    - name: Executar download UUP
       shell: cmd
       run: |
-        cd uup
+        call uup.cmd
+
+    - name: Configurar conversão máxima
+      shell: cmd
+      run: |
+        cd uup\*
         echo set AutoStart=1>>ConvertConfig.ini
         echo set Cleanup=1>>ConvertConfig.ini
         echo set ResetBase=1>>ConvertConfig.ini
-        echo set NetFx3=0>>ConvertConfig.ini
-        echo set StartVirtual=0>>ConvertConfig.ini
         echo set wim2esd=1>>ConvertConfig.ini
         echo set esdcompress=LZMS>>ConvertConfig.ini
 
-    - name: Converter UUP → ISO + ESD
+    - name: Converter para ISO + ESD
       shell: cmd
       run: |
-        cd uup
+        cd uup\*
         call convert-UUP.cmd
 
-    - name: Preparar arquivos finais
+    - name: Copiar install.esd
       shell: cmd
       run: |
         mkdir final
-        copy uup\ISO\sources\install.esd final\install.esd
+        copy uup\*\ISO\sources\install.esd final\install.esd
 
     - name: Split 1900MB
       shell: bash
@@ -53,11 +55,11 @@ jobs:
         mkdir split
         split -b 1900M final/install.esd split/install.esd.part-
 
-    - name: Criar Release
+    - name: Upload Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: win11-pro-${{ env.BUILD_VER }}
-        name: Windows 11 Pro ${{ env.BUILD_VER }} (ESD MAX AUTO)
+        tag_name: win11-pro-fixed
+        name: Windows 11 Pro (ESD MAX FIXED)
         files: split/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
