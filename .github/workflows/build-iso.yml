@@ -1,4 +1,4 @@
-name: Windows UUP Auto (SCRIPT FIXADO)
+name: Windows ISO Direct (FINAL ESTÁVEL)
 
 on:
   workflow_dispatch:
@@ -10,50 +10,53 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    # 1. Baixar script completo
-    - name: Baixar script multi
+    # 1. Baixar ISO pronta (SUBSTITUA PELO SEU LINK)
+    - name: Baixar ISO
       run: |
-        curl -L -o build.cmd "https://uup.rg-adguard.net/api/GetFiles?id=59fd22e9-ef3d-4734-8a78-4354718ad854&lang=pt-br&edition=professional&script=yes"
+        curl -L -o windows.iso "COLE_AQUI_O_LINK_DA_ISO"
 
-    # 2. Baixar binários necessários
-    - name: Baixar bin
-      run: |
-        mkdir bin
-        curl -L -o bin/aria2c.exe https://uup.rg-adguard.net/dl/aria2/aria2c_x86.exe
-
-    # 3. FORÇAR CONFIGURAÇÃO AUTOMÁTICA
-    - name: Patch automático no script
+    # 2. Montar ISO
+    - name: Montar ISO
       shell: powershell
       run: |
-        (Get-Content build.cmd) `
-        -replace 'set update_en=OFF','set update_en=ON' `
-        -replace 'set clean_en=OFF','set clean_en=ON' `
-        -replace 'set esd_en=OFF','set esd_en=ON' `
-        -replace 'set NetFx_en=OFF','set NetFx_en=OFF' `
-        -replace 'set Lang_en=OFF','set Lang_en=OFF' `
-        | Set-Content build_fixed.cmd
+        Mount-DiskImage -ImagePath windows.iso
+        $drive = (Get-DiskImage windows.iso | Get-Volume).DriveLetter
+        echo "DRIVE=$drive:" >> $env:GITHUB_ENV
 
-    # 4. Remover menu interativo
-    - name: Remover menu
-      shell: powershell
+    # 3. Copiar conteúdo
+    - name: Copiar arquivos
       run: |
-        (Get-Content build_fixed.cmd) `
-        -replace ':Menu[\s\S]*:DownListLang', ':DownListLang' `
-        | Set-Content final.cmd
+        mkdir work
+        xcopy %DRIVE%\* work /E /I /Y
 
-    # 5. Rodar script
-    - name: Executar build
+    # 4. Converter WIM → ESD (compressão máxima)
+    - name: Converter ESD MAX
       shell: cmd
       run: |
-        call final.cmd
+        dism /Export-Image ^
+        /SourceImageFile:work\sources\install.wim ^
+        /SourceIndex:1 ^
+        /DestinationImageFile:work\sources\install.esd ^
+        /Compress:recovery
 
-    # 6. Upload (se gerar)
+    # 5. Remover WIM antigo
+    - name: Limpeza
+      run: |
+        del work\sources\install.wim
+
+    # 6. Split 1900MB
+    - name: Dividir arquivo
+      shell: bash
+      run: |
+        mkdir split
+        split -b 1900M work/sources/install.esd split/install.esd.part-
+
+    # 7. Upload Release
     - name: Upload Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: win11-pro-auto
-        name: Windows 11 Pro (AUTO BUILD)
-        files: |
-          uup/**/*.iso
+        tag_name: win11-iso-direct
+        name: Windows ISO Direct (ESD MAX)
+        files: split/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
