@@ -1,4 +1,4 @@
-name: Windows Pro ISO Auto Build (ULTRA FIX)
+name: Windows Pro ISO Auto Build (STABLE FINAL)
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Baixar script UUP completo
+    - name: Baixar script UUP
       shell: cmd
       run: |
         curl -L -o uup.cmd "https://uup.rg-adguard.net/api/GetFiles?id=59fd22e9-ef3d-4734-8a78-4354718ad854&lang=pt-br&edition=professional&script=yes"
@@ -22,12 +22,31 @@ jobs:
         powershell -Command "Expand-Archive aria2.zip -DestinationPath aria2"
         copy aria2\aria2c.exe .
 
-    - name: Executar download UUP
+    - name: Download UUP com retry
       shell: cmd
       run: |
+        set retries=3
+
+        :retry
         call uup.cmd
 
-    - name: Configurar e converter (SEM ERRO)
+        if exist uup (
+          echo Download OK
+        ) else (
+          set /a retries-=1
+          if %retries% GTR 0 goto retry
+          echo Falha no download
+          exit /b 1
+        )
+
+    - name: Validar arquivos
+      shell: cmd
+      run: |
+        for /d %%i in (uup\*) do (
+          dir %%i\*.esd >nul 2>&1 || exit /b 1
+        )
+
+    - name: Converter UUP (seguro)
       shell: cmd
       run: |
         for /d %%i in (uup\*) do (
@@ -44,7 +63,7 @@ jobs:
           cd ..
         )
 
-    - name: Copiar install.esd
+    - name: Copiar ESD
       shell: cmd
       run: |
         mkdir final
@@ -59,8 +78,8 @@ jobs:
     - name: Upload Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: win11-pro-ultra
-        name: Windows 11 Pro (ESD MAX ULTRA)
+        tag_name: win11-pro-stable
+        name: Windows 11 Pro (ESD MAX STABLE)
         files: split/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
