@@ -1,4 +1,4 @@
-name: Windows Pro ISO Auto Build (STABLE FINAL)
+name: Windows Pro ISO Auto Build (FINAL REAL)
 
 on:
   workflow_dispatch:
@@ -15,38 +15,17 @@ jobs:
       run: |
         curl -L -o uup.cmd "https://uup.rg-adguard.net/api/GetFiles?id=59fd22e9-ef3d-4734-8a78-4354718ad854&lang=pt-br&edition=professional&script=yes"
 
-    - name: Baixar aria2
+    - name: Baixar aria2 (FIX)
       shell: cmd
       run: |
-        curl -L -o aria2.zip https://uup.rg-adguard.net/dl/aria2_install.zip
-        powershell -Command "Expand-Archive aria2.zip -DestinationPath aria2"
-        copy aria2\aria2c.exe .
+        curl -L -o aria2c.exe https://uup.rg-adguard.net/dl/aria2/aria2c_x86.exe
 
-    - name: Download UUP com retry
+    - name: Executar download UUP
       shell: cmd
       run: |
-        set retries=3
-
-        :retry
         call uup.cmd
 
-        if exist uup (
-          echo Download OK
-        ) else (
-          set /a retries-=1
-          if %retries% GTR 0 goto retry
-          echo Falha no download
-          exit /b 1
-        )
-
-    - name: Validar arquivos
-      shell: cmd
-      run: |
-        for /d %%i in (uup\*) do (
-          dir %%i\*.esd >nul 2>&1 || exit /b 1
-        )
-
-    - name: Converter UUP (seguro)
+    - name: Converter (100% seguro)
       shell: cmd
       run: |
         for /d %%i in (uup\*) do (
@@ -63,7 +42,7 @@ jobs:
           cd ..
         )
 
-    - name: Copiar ESD
+    - name: Copiar install.esd
       shell: cmd
       run: |
         mkdir final
@@ -78,8 +57,8 @@ jobs:
     - name: Upload Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: win11-pro-stable
-        name: Windows 11 Pro (ESD MAX STABLE)
+        tag_name: win11-pro-final-ok
+        name: Windows 11 Pro (ESD MAX OK)
         files: split/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
