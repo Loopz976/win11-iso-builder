@@ -1,4 +1,4 @@
-name: Windows Pro ISO Auto Build (FINAL REAL)
+name: Windows Pro ISO Auto Build (WORKING FINAL)
 
 on:
   workflow_dispatch:
@@ -10,43 +10,36 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Baixar script UUP
+    - name: Baixar pacote UUP completo (FIX REAL)
       shell: cmd
       run: |
-        curl -L -o uup.cmd "https://uup.rg-adguard.net/api/GetFiles?id=59fd22e9-ef3d-4734-8a78-4354718ad854&lang=pt-br&edition=professional&script=yes"
+        curl -L -o uup.zip "https://uupdump.net/download.php?id=59fd22e9-ef3d-4734-8a78-4354718ad854&pack=pt-br&edition=professional"
+        powershell -Command "Expand-Archive uup.zip -DestinationPath uup"
 
-    - name: Baixar aria2 (FIX)
+    - name: Rodar conversão automática
       shell: cmd
       run: |
-        curl -L -o aria2c.exe https://uup.rg-adguard.net/dl/aria2/aria2c_x86.exe
+        cd uup
+        call uup_download_windows.cmd
 
-    - name: Executar download UUP
+    - name: Configurar compressão máxima
       shell: cmd
       run: |
-        call uup.cmd
+        cd uup
+        echo set wim2esd=1>>ConvertConfig.ini
+        echo set esdcompress=LZMS>>ConvertConfig.ini
 
-    - name: Converter (100% seguro)
+    - name: Converter ISO
       shell: cmd
       run: |
-        for /d %%i in (uup\*) do (
-          cd %%i
-
-          echo set AutoStart=1>>ConvertConfig.ini
-          echo set Cleanup=1>>ConvertConfig.ini
-          echo set ResetBase=1>>ConvertConfig.ini
-          echo set wim2esd=1>>ConvertConfig.ini
-          echo set esdcompress=LZMS>>ConvertConfig.ini
-
-          call convert-UUP.cmd
-
-          cd ..
-        )
+        cd uup
+        call convert-UUP.cmd
 
     - name: Copiar install.esd
       shell: cmd
       run: |
         mkdir final
-        for /d %%i in (uup\*) do copy %%i\ISO\sources\install.esd final\install.esd
+        copy uup\ISO\sources\install.esd final\install.esd
 
     - name: Split 1900MB
       shell: bash
@@ -57,8 +50,8 @@ jobs:
     - name: Upload Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: win11-pro-final-ok
-        name: Windows 11 Pro (ESD MAX OK)
+        tag_name: win11-pro-ok
+        name: Windows 11 Pro (ESD MAX FINAL OK)
         files: split/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
