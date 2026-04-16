@@ -1,4 +1,4 @@
-name: Windows Pro ISO Auto Build (FIXED)
+name: Windows Pro ISO Auto Build (FINAL FIX)
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Baixar script UUP (completo)
+    - name: Baixar script UUP completo
       shell: cmd
       run: |
         curl -L -o uup.cmd "https://uup.rg-adguard.net/api/GetFiles?id=59fd22e9-ef3d-4734-8a78-4354718ad854&lang=pt-br&edition=professional&script=yes"
@@ -27,27 +27,34 @@ jobs:
       run: |
         call uup.cmd
 
+    - name: Detectar pasta UUP
+      shell: cmd
+      run: |
+        for /d %%i in (uup\*) do set UUPDIR=%%i
+        echo UUPDIR=%UUPDIR%
+        echo UUPDIR=%UUPDIR%>>%GITHUB_ENV%
+
     - name: Configurar conversão máxima
       shell: cmd
       run: |
-        cd uup\*
+        cd %UUPDIR%
         echo set AutoStart=1>>ConvertConfig.ini
         echo set Cleanup=1>>ConvertConfig.ini
         echo set ResetBase=1>>ConvertConfig.ini
         echo set wim2esd=1>>ConvertConfig.ini
         echo set esdcompress=LZMS>>ConvertConfig.ini
 
-    - name: Converter para ISO + ESD
+    - name: Converter UUP → ISO + ESD
       shell: cmd
       run: |
-        cd uup\*
+        cd %UUPDIR%
         call convert-UUP.cmd
 
     - name: Copiar install.esd
       shell: cmd
       run: |
         mkdir final
-        copy uup\*\ISO\sources\install.esd final\install.esd
+        copy %UUPDIR%\ISO\sources\install.esd final\install.esd
 
     - name: Split 1900MB
       shell: bash
@@ -58,8 +65,8 @@ jobs:
     - name: Upload Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: win11-pro-fixed
-        name: Windows 11 Pro (ESD MAX FIXED)
+        tag_name: win11-pro-final
+        name: Windows 11 Pro (ESD MAX FINAL)
         files: split/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
