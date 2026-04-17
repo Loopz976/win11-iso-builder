@@ -57,21 +57,6 @@ jobs:
         }
 
     # =========================
-    # SUBSTITUIR W10UI.INI (FIX REAL)
-    # =========================
-    - name: Apply W10UI.ini
-      shell: powershell
-      run: |
-        if (!(Test-Path "W10UI.ini")) {
-          Write-Error "W10UI.ini nao encontrado na raiz do repo"
-          exit 1
-        }
-
-        Copy-Item "W10UI.ini" "work\out\Files\W10UI.ini" -Force
-
-        Write-Host "INI aplicado com sucesso"
-
-    # =========================
     # EXTRAIR UUP
     # =========================
     - name: Extract UUP
@@ -100,11 +85,10 @@ jobs:
       shell: powershell
       run: |
         $aria = (Get-Command aria2c).Source
-        New-Item -ItemType Directory -Path "uup\files" -Force
-        Copy-Item $aria "uup\files\aria2c.exe" -Force
+        Copy-Item $aria "uup\aria2c.exe" -Force
 
     # =========================
-    # RODAR UUP
+    # RODAR UUP (CORRETO)
     # =========================
     - name: Run UUP download
       shell: cmd
@@ -131,7 +115,7 @@ jobs:
         }
 
     # =========================
-    # RODAR W10UI
+    # RODAR W10UI (SEM INTERFERÊNCIA)
     # =========================
     - name: Run W10UI
       shell: cmd
