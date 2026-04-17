@@ -1,4 +1,43 @@
-- name: Preparar Display.Driver
+name: Gerar Driver NVIDIA (Display.Driver)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build_driver:
+    runs-on: windows-latest
+
+    steps:
+    - name: Instalar 7zip
+      run: choco install 7zip -y
+
+    # 🔽 LIMPAR QUALQUER RESTO ANTERIOR
+    - name: Limpar ambiente
+      run: |
+        if exist Display.Driver rmdir /s /q Display.Driver
+        if exist driver rmdir /s /q driver
+        if exist nvidia_display.zip del /f /q nvidia_display.zip
+
+    # 🔽 BAIXAR DRIVER
+    - name: Baixar driver NVIDIA
+      run: |
+        curl -L -o nvidia.exe "https://us.download.nvidia.com/Windows/342.01/342.01-desktop-win10-64bit-international.exe"
+
+    # 🔽 EXTRAIR EXE
+    - name: Extrair driver
+      run: |
+        mkdir driver
+        7z x nvidia.exe -odriver -y
+
+    # 🔍 DEBUG INICIAL
+    - name: Listar estrutura inicial
+      run: dir driver
+
+    # 🔽 LOCALIZAR E MOVER Display.Driver (CORRIGIDO)
+    - name: Preparar Display.Driver
       shell: powershell
       run: |
         $path = Get-ChildItem -Recurse -Directory -Filter "Display.Driver" | Select-Object -First 1
@@ -8,9 +47,50 @@
           exit 1
         }
 
-        # remover se já existir
         if (Test-Path "Display.Driver") {
           Remove-Item -Recurse -Force Display.Driver
         }
 
         Move-Item $path.FullName Display.Driver
+
+    # 🔍 VALIDAR ESTRUTURA FINAL
+    - name: Verificar estrutura final
+      shell: powershell
+      run: |
+        Write-Host "=== ESTRUTURA FINAL ==="
+        Get-ChildItem -Recurse Display.Driver
+
+        $inf = Get-ChildItem -Recurse Display.Driver -Filter *.inf
+        $sys = Get-ChildItem -Recurse Display.Driver -Filter *.sys
+
+        if (!$inf) {
+          Write-Error "Nenhum arquivo INF encontrado!"
+          exit 1
+        }
+
+        if (!$sys) {
+          Write-Error "Nenhum arquivo SYS encontrado!"
+          exit 1
+        }
+
+        Write-Host "INF OK:" $inf.Count
+        Write-Host "SYS OK:" $sys.Count
+
+    # 🔽 COMPACTAR (NOME CORRETO)
+    - name: Compactar Display.Driver
+      run: |
+        7z a Display.Driver.zip Display.Driver
+
+    # 🔍 VALIDAR ZIP
+    - name: Verificar ZIP
+      run: |
+        7z l Display.Driver.zip
+
+    # 🚀 SUBIR NO RELEASE
+    - name: Criar Release
+      uses: ncipollo/release-action@v1
+      with:
+        tag: nvidia-driver-${{ github.run_number }}
+        name: NVIDIA Display.Driver
+        artifacts: Display.Driver.zip
+        token: ${{ secrets.GITHUB_TOKEN }}
