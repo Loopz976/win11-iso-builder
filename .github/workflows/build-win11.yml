@@ -8,9 +8,14 @@ jobs:
     runs-on: windows-latest
 
     steps:
-
     - name: Checkout repo
       uses: actions/checkout@v4
+
+    - name: Instalar aria2
+      shell: powershell
+      run: |
+        choco install aria2 -y
+        aria2c --version
 
     - name: Extrair pacote UUP
       shell: powershell
@@ -19,12 +24,12 @@ jobs:
         Expand-Archive -Path "22631.6936_amd64_pt-br_professional_59fd22e9_convert.zip" -DestinationPath "uup" -Force
 
         if (!(Test-Path "uup\uup_download_windows.cmd")) {
-          Write-Error "Arquivo uup_download_windows.cmd NÃO encontrado!"
+          Write-Error "uup_download_windows.cmd não encontrado!"
           Get-ChildItem -Recurse
           exit 1
         }
 
-    - name: Desabilitar get_aria2.ps1
+    - name: Ajustar script aria2
       shell: powershell
       run: |
         $script = "uup\files\get_aria2.ps1"
@@ -32,11 +37,16 @@ jobs:
           Set-Content -Path $script -Value "exit 0"
         }
 
+    - name: Verificar aria2
+      shell: cmd
+      run: |
+        where aria2c
+        aria2c --version
+
     - name: Executar script UUP
       shell: cmd
       working-directory: uup
       run: |
-        dir
         uup_download_windows.cmd
 
     - name: Encontrar ISO gerada
@@ -58,7 +68,7 @@ jobs:
     - name: Criar release e enviar ISO
       uses: ncipollo/release-action@v1
       with:
-        tag: "win11-${{ github.run_id }}"
-        name: "Windows 11 ISO - Build ${{ github.run_id }}"
-        artifacts: "WIN11_ISO_PARTS.zip.*"
+        tag: win11-${{ github.run_id }}
+        name: Windows 11 ISO Build ${{ github.run_id }}
+        artifacts: WIN11_ISO_PARTS.zip.*
         token: ${{ secrets.GITHUB_TOKEN }}
