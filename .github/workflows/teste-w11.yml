@@ -1,4 +1,4 @@
-name: Teste UUP Win11 (ZIP correto)
+name: Teste Updates Win11 (padrão UUP)
 
 on:
   workflow_dispatch:
@@ -16,56 +16,64 @@ jobs:
       run: |
         choco install aria2 -y
 
-    - name: Preparar pasta
+    - name: Extrair pacote (Win11)
       shell: powershell
       run: |
         New-Item -ItemType Directory -Path uup -Force
+        Expand-Archive -Path "22631.6936_amd64_updates_59fd22e9.zip" -DestinationPath "uup" -Force
 
-    - name: Extrair ZIP UUP
-      shell: powershell
-      run: |
-        Expand-Archive -Path "uup11.zip" -DestinationPath "uup" -Force
-
-        Write-Host "=== ARQUIVOS EXTRAÍDOS ==="
+        Write-Host "=== CONTEÚDO EXTRAÍDO ==="
         Get-ChildItem -Recurse uup
 
-    - name: Validar script UUP
+    - name: Preparar estrutura (igual UUP)
       shell: powershell
       run: |
-        if (!(Test-Path "uup\uup_download_windows.cmd")) {
-          Write-Error "Script UUP NÃO encontrado!"
-          exit 1
-        }
-
-    - name: Preparar aria2 no padrão UUP
-      shell: powershell
-      run: |
-        $aria = (Get-Command aria2c).Source
-
         New-Item -ItemType Directory -Path "uup\files" -Force
+
+        $aria = (Get-Command aria2c).Source
         Copy-Item $aria "uup\files\aria2c.exe" -Force
 
         if (!(Test-Path "uup\files\aria2c.exe")) {
-          Write-Error "aria2 não copiado!"
+          Write-Error "aria2 não copiado corretamente!"
           exit 1
         }
 
-    - name: Executar UUP (DOWNLOAD REAL)
+    - name: Executar script do pacote (se existir)
       shell: cmd
       working-directory: uup
       run: |
-        uup_download_windows.cmd
+        if exist *.cmd (
+          echo Executando script do pacote...
+          for %%f in (*.cmd) do call "%%f"
+        ) else (
+          echo Nenhum script .cmd encontrado
+        )
 
-    - name: Verificar resultado
+    - name: Validar arquivos (modo UUP adaptado)
       shell: powershell
       run: |
-        Write-Host "=== RESULTADO ==="
-        Get-ChildItem -Recurse uup
+        $cab = Get-ChildItem -Recurse uup -Filter *.cab
+        $psf = Get-ChildItem -Recurse uup -Filter *.psf
+        $wim = Get-ChildItem -Recurse uup -Filter *.wim
 
-        $esd = Get-ChildItem -Recurse uup -Filter *.esd
-        if ($esd) {
-          Write-Host "DOWNLOAD UUP OK"
-        } else {
-          Write-Error "Falha no download UUP"
+        if (!$cab -and !$psf -and !$wim) {
+          Write-Error "Nenhum arquivo válido encontrado!"
           exit 1
         }
+
+        Write-Host "CAB:" $cab.Count
+        Write-Host "PSF:" $psf.Count
+        Write-Host "WIM:" $wim.Count
+
+    - name: Compactar pacote teste
+      shell: powershell
+      run: |
+        7z a -tzip -v1000m pacote_teste.zip uup\*
+
+    - name: Criar Release
+      uses: ncipollo/release-action@v1
+      with:
+        tag: teste-${{ github.run_number }}
+        name: Teste Updates Win11
+        artifacts: pacote_teste.zip.*
+        token: ${{ secrets.GITHUB_TOKEN }}
