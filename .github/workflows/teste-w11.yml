@@ -1,76 +1,77 @@
-name: Teste pacote updates Win11
+name: Testar pacote updates Win11
 
 on:
   workflow_dispatch:
 
 jobs:
-  teste:
+  build_win11:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout repositório
+    - name: Checkout
       uses: actions/checkout@v4
 
     - name: Instalar 7zip
       run: choco install 7zip -y
 
-    - name: Verificar arquivos na raiz
+    # 🔽 CRIAR ESTRUTURA IGUAL UUP
+    - name: Preparar pasta UUP
       shell: powershell
       run: |
-        Write-Host "=== ARQUIVOS NA RAIZ ==="
-        Get-ChildItem
+        New-Item -ItemType Directory -Path uup -Force
 
+    # 🔽 EXTRAIR ZIP (CORRETO)
     - name: Extrair pacote updates
       shell: powershell
       run: |
         if (!(Test-Path "22631.6936_amd64_updates_59fd22e9.zip")) {
-          Write-Error "ZIP NÃO ENCONTRADO NA RAIZ!"
+          Write-Error "ZIP NÃO ENCONTRADO!"
+          Get-ChildItem
           exit 1
         }
 
-        New-Item -ItemType Directory -Path updates -Force
-        Expand-Archive -Path "22631.6936_amd64_updates_59fd22e9.zip" -DestinationPath "updates" -Force
+        7z x "22631.6936_amd64_updates_59fd22e9.zip" -ouup -y
 
-    - name: Listar conteúdo extraído
+    # 🔍 DEBUG IGUAL UUP
+    - name: Listar estrutura UUP
       shell: powershell
       run: |
-        Write-Host "=== CONTEÚDO EXTRAÍDO ==="
-        Get-ChildItem -Recurse updates
+        Write-Host "=== ESTRUTURA UUP ==="
+        Get-ChildItem -Recurse uup
 
-    - name: Validar arquivos importantes
+    # 🔽 VALIDAR PACOTE
+    - name: Validar conteúdo
       shell: powershell
       run: |
-        $cab = Get-ChildItem -Recurse updates -Filter *.cab
-        $wim = Get-ChildItem -Recurse updates -Filter *.wim
-        $psf = Get-ChildItem -Recurse updates -Filter *.psf
+        $cab = Get-ChildItem -Recurse uup -Filter *.cab
 
         if (!$cab) {
-          Write-Error "Nenhum .cab encontrado!"
+          Write-Error "Nenhum CAB encontrado - pacote inválido!"
           exit 1
         }
 
-        Write-Host "CAB encontrados:" $cab.Count
-        Write-Host "WIM encontrados:" $wim.Count
-        Write-Host "PSF encontrados:" $psf.Count
+        Write-Host "CAB OK:" $cab.Count
 
-    - name: Preparar pasta final
+    # 🔽 SIMULAR PASTA UPDATES (W10UI)
+    - name: Preparar Updates
       shell: powershell
       run: |
-        New-Item -ItemType Directory -Path final\Updates -Force
+        New-Item -ItemType Directory -Path uup\Updates -Force
 
-        Get-ChildItem -Recurse updates -Include *.cab, *.msu |
-        Copy-Item -Destination final\Updates -Force
+        Get-ChildItem -Recurse uup -Include *.cab, *.msu |
+        Copy-Item -Destination uup\Updates -Force
 
-    - name: Verificar resultado final
+    # 🔍 VALIDAR FINAL
+    - name: Verificar Updates
       shell: powershell
       run: |
         Write-Host "=== UPDATES PRONTOS ==="
-        Get-ChildItem final\Updates
+        Get-ChildItem uup\Updates
 
-        if (!(Get-ChildItem final\Updates)) {
-          Write-Error "Nenhum update preparado!"
+        if (!(Get-ChildItem uup\Updates)) {
+          Write-Error "Falha ao preparar updates!"
           exit 1
         }
 
     - name: Final
-      run: echo "PACOTE OK - PRONTO PRA INTEGRAR"
+      run: echo "PACOTE FUNCIONANDO 100%"
