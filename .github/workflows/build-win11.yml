@@ -15,7 +15,6 @@ jobs:
       shell: powershell
       run: |
         choco install aria2 -y
-        aria2c --version
 
     - name: Extrair pacote UUP
       shell: powershell
@@ -23,25 +22,14 @@ jobs:
         New-Item -ItemType Directory -Path uup -Force
         Expand-Archive -Path "22631.6936_amd64_pt-br_professional_59fd22e9_convert.zip" -DestinationPath "uup" -Force
 
-        if (!(Test-Path "uup\uup_download_windows.cmd")) {
-          Write-Error "uup_download_windows.cmd não encontrado!"
-          Get-ChildItem -Recurse
-          exit 1
-        }
-
-    - name: Ajustar script aria2
+    - name: Copiar aria2 para pasta correta
       shell: powershell
       run: |
-        $script = "uup\files\get_aria2.ps1"
-        if (Test-Path $script) {
-          Set-Content -Path $script -Value "exit 0"
+        $aria = (Get-Command aria2c).Source
+        if (!(Test-Path "uup\files")) {
+          New-Item -ItemType Directory -Path "uup\files" -Force
         }
-
-    - name: Verificar aria2
-      shell: cmd
-      run: |
-        where aria2c
-        aria2c --version
+        Copy-Item $aria "uup\files\aria2c.exe" -Force
 
     - name: Executar script UUP
       shell: cmd
