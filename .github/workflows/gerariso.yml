@@ -13,6 +13,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    # =========================
+    # DEPENDENCIAS
+    # =========================
     - name: Install deps
       shell: powershell
       run: |
@@ -20,51 +23,56 @@ jobs:
         choco install 7zip -y
 
     # =========================
-    # WORKDIR
+    # WORKSPACE
     # =========================
-    - name: Prepare workspace
+    - name: Create workspace
       shell: powershell
       run: |
         New-Item -ItemType Directory -Path work -Force
 
     # =========================
-    # BASE
+    # DOWNLOAD BASE
     # =========================
     - name: Download base
       shell: powershell
       run: |
         cd work
+
         aria2c -o base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
         aria2c -o base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
         aria2c -o base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
 
+    # =========================
+    # EXTRAIR BASE
+    # =========================
     - name: Extract base
       shell: powershell
       run: |
         cd work
         7z x base.7z.001 -oout -y
 
-    # =========================
-    # INI
-    # =========================
-    - name: Create W10UI.ini
-      shell: powershell
-      run: |
-        @"
-AutoStart=1
-AddUpdates=1
-AddDrivers=1
-Cleanup=1
-ResetBase=1
-Wim2ESD=1
-Convert=1
-Format=ESD
-Compression=recovery
-Drv_Source=Drivers\OS
-"@ | Out-File -Encoding ASCII "work\out\Files\W10UI.ini"
+        if (!(Test-Path "out\Files")) {
+          Write-Error "Files nao encontrado"
+          exit 1
+        }
 
     # =========================
-    # UUP (SEU CÓDIGO FUNCIONAL)
+    # SUBSTITUIR W10UI.INI (FIX REAL)
+    # =========================
+    - name: Apply W10UI.ini
+      shell: powershell
+      run: |
+        if (!(Test-Path "W10UI.ini")) {
+          Write-Error "W10UI.ini nao encontrado na raiz do repo"
+          exit 1
+        }
+
+        Copy-Item "W10UI.ini" "work\out\Files\W10UI.ini" -Force
+
+        Write-Host "INI aplicado com sucesso"
+
+    # =========================
+    # EXTRAIR UUP
     # =========================
     - name: Extract UUP
       shell: powershell
@@ -73,14 +81,21 @@ Drv_Source=Drivers\OS
 
         $zip = Get-ChildItem -Filter *.zip | Select-Object -First 1
 
-        if (!$zip) { exit 1 }
+        if (!$zip) {
+          Write-Error "ZIP UUP nao encontrado"
+          exit 1
+        }
 
         7z x $zip.FullName -ouup -y
 
         if (!(Test-Path "uup\uup_download_windows.cmd")) {
+          Write-Error "Script UUP nao encontrado"
           exit 1
         }
 
+    # =========================
+    # PREPARAR ARIA2
+    # =========================
     - name: Prepare aria2
       shell: powershell
       run: |
@@ -88,14 +103,16 @@ Drv_Source=Drivers\OS
         New-Item -ItemType Directory -Path "uup\files" -Force
         Copy-Item $aria "uup\files\aria2c.exe" -Force
 
-    # 🔥 AQUI ESTÁ O FIX REAL
-    - name: Run UUP (CORRETO)
+    # =========================
+    # RODAR UUP
+    # =========================
+    - name: Run UUP download
       shell: cmd
       working-directory: uup
       run: uup_download_windows.cmd
 
     # =========================
-    # COPIAR PARA FILES
+    # COPIAR UPDATES
     # =========================
     - name: Copy updates
       shell: powershell
@@ -105,8 +122,16 @@ Drv_Source=Drivers\OS
 
         Copy-Item "uup\*" $dest -Recurse -Force
 
+        $count = (Get-ChildItem $dest -Recurse).Count
+        Write-Host "Arquivos copiados: $count"
+
+        if ($count -lt 50) {
+          Write-Error "Download incompleto"
+          exit 1
+        }
+
     # =========================
-    # W10UI
+    # RODAR W10UI
     # =========================
     - name: Run W10UI
       shell: cmd
@@ -114,17 +139,27 @@ Drv_Source=Drivers\OS
       run: W10UI.cmd
 
     # =========================
-    # VALIDATE ISO
+    # VALIDAR ISO
     # =========================
     - name: Validate ISO
       shell: powershell
       run: |
         $iso = Get-ChildItem work\out\Files -Recurse -Filter *.iso | Select-Object -First 1
-        if (!$iso) { exit 1 }
-        if ($iso.Length -lt 2GB) { exit 1 }
+
+        if (!$iso) {
+          Write-Error "ISO nao gerada"
+          exit 1
+        }
+
+        if ($iso.Length -lt 2GB) {
+          Write-Error "ISO invalida"
+          exit 1
+        }
+
+        Write-Host "ISO OK"
 
     # =========================
-    # COMPRESS
+    # COMPACTAR
     # =========================
     - name: Compress ISO
       shell: powershell
@@ -134,7 +169,8 @@ Drv_Source=Drivers\OS
 
     # =========================
     # RELEASE
-    - name: Release
+    # =========================
+    - name: Create Release
       uses: ncipollo/release-action@v1
       with:
         tag: windows-11-full-${{ github.run_number }}
