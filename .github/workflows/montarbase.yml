@@ -1,82 +1,70 @@
-name: Validate Release Base
+name: Validate W10 LTSC Base Full
 
 on:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   validate:
     runs-on: windows-latest
 
     steps:
-      - name: Criar pasta de trabalho
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Force -Path "work" | Out-Null
+    - name: Instalar dependências
+      shell: powershell
+      run: |
+        choco install aria2 -y
+        choco install 7zip -y
 
-      - name: Baixar partes do release (curl + retry)
-        shell: powershell
-        run: |
-          cd work
+    - name: Criar pasta de trabalho
+      shell: powershell
+      run: |
+        New-Item -ItemType Directory -Force -Path "work" | Out-Null
 
-          function Download($url, $out) {
-            $max = 3
-            for ($i=1; $i -le $max; $i++) {
-              Write-Host "Download tentativa $i -> $out"
-              curl -L $url -o $out
-              if (Test-Path $out) {
-                $size = (Get-Item $out).Length
-                if ($size -gt 100MB) {
-                  Write-Host "Download OK: $out ($size bytes)"
-                  return
-                }
-              }
-              Start-Sleep -Seconds 5
-            }
-            Write-Error "Falha no download: $out"
-            exit 1
-          }
+    - name: Baixar partes do release (aria2 ultra rápido)
+      shell: powershell
+      run: |
+        cd work
 
-          Download "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001" "base.7z.001"
-          Download "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002" "base.7z.002"
-          Download "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003" "base.7z.003"
+        aria2c -x 16 -s 16 -k 1M -d . -o base.7z.001 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001"
+        aria2c -x 16 -s 16 -k 1M -d . -o base.7z.002 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002"
+        aria2c -x 16 -s 16 -k 1M -d . -o base.7z.003 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003"
 
-      - name: Instalar 7zip
-        run: choco install 7zip -y
+    - name: Extrair base completa
+      shell: powershell
+      run: |
+        cd work
+        7z x base.7z.001 -oextracted
 
-      - name: Extrair base completa
-        shell: powershell
-        run: |
-          cd work
-          7z x base.7z.001 -oextracted
+    - name: Validar estrutura completa
+      shell: powershell
+      run: |
+        $root = "work\extracted\Files"
 
-      - name: Validar estrutura completa
-        shell: powershell
-        run: |
-          $root = "work\extracted\Files"
+        if (!(Test-Path $root)) {
+          Write-Error "Files não encontrado"
+          exit 1
+        }
 
-          if (!(Test-Path $root)) {
-            Write-Error "Files não encontrado"
-            exit 1
-          }
+        if (!(Test-Path "$root\W10UI.cmd")) {
+          Write-Error "W10UI não encontrado na raiz"
+          exit 1
+        }
 
-          if (!(Test-Path "$root\W10UI.cmd")) {
-            Write-Error "W10UI não encontrado na raiz"
-            exit 1
-          }
+        if (!(Test-Path "$root\ISO\sources\install.wim") -and !(Test-Path "$root\ISO\sources\install.esd")) {
+          Write-Error "ISO inválida (sem install.wim/esd)"
+          exit 1
+        }
 
-          if (!(Test-Path "$root\ISO\sources\install.wim") -and !(Test-Path "$root\ISO\sources\install.esd")) {
-            Write-Error "ISO inválida (sem install.wim/esd)"
-            exit 1
-          }
+        if (!(Test-Path "$root\Drivers\OS\Display.Driver")) {
+          Write-Error "Drivers NVIDIA não encontrados"
+          exit 1
+        }
 
-          if (!(Test-Path "$root\Drivers\OS\Display.Driver")) {
-            Write-Error "Drivers NVIDIA não encontrados"
-            exit 1
-          }
+        if (!(Test-Path "$root\Updates")) {
+          Write-Error "Pasta Updates não encontrada"
+          exit 1
+        }
 
-          if (!(Test-Path "$root\Updates")) {
-            Write-Error "Pasta Updates não encontrada"
-            exit 1
-          }
-
-          Write-Host "VALIDAÇÃO OK - BASE 100% INTACTA"
+        Write-Host "VALIDAÇÃO OK - BASE 100% INTACTA"
