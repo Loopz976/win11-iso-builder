@@ -26,7 +26,7 @@ jobs:
       run: mkdir work
 
     # =========================
-    # BAIXAR BASE (FILES PRONTA)
+    # BAIXAR BASE
     # =========================
     - name: Baixar base
       run: |
@@ -40,34 +40,26 @@ jobs:
         cd work
         7z x base.7z.001 -oout
 
+        if not exist work\out\Files exit 1
+
     # =========================
-    # SUBSTITUIR INI (NOME CORRETO)
+    # SUBSTITUIR INI (DO REPO)
     # =========================
     - name: Aplicar W10UI.ini
       shell: powershell
       run: |
-        if (!(Test-Path "W10UI.ini")) {
-          Write-Error "W10UI.ini não encontrado no repo"
-          exit 1
-        }
-
         Copy-Item "W10UI.ini" "work\out\Files\W10UI.ini" -Force
 
         Write-Host "INI aplicado:"
         Get-Content "work\out\Files\W10UI.ini"
 
     # =========================
-    # UUP (DOWNLOAD COMPLETO)
+    # UUP
     # =========================
     - name: Extrair UUP
       shell: powershell
       run: |
         Expand-Archive "uup11.zip" -DestinationPath "uup" -Force
-
-        if (!(Test-Path "uup\uup_download_windows.cmd")) {
-          Write-Error "Script UUP não encontrado"
-          exit 1
-        }
 
     - name: Preparar aria2
       shell: powershell
@@ -76,13 +68,13 @@ jobs:
         New-Item -ItemType Directory -Path "uup\files" -Force
         Copy-Item $aria "uup\files\aria2c.exe" -Force
 
-    - name: Baixar updates completos
+    - name: Baixar updates
       run: |
         cd uup
         uup_download_windows.cmd
 
     # =========================
-    # COPIAR 100% DOS UPDATES
+    # COPIAR TODOS UPDATES
     # =========================
     - name: Copiar updates
       shell: powershell
@@ -92,7 +84,7 @@ jobs:
         Copy-Item "uup\*" $dest -Recurse -Force
 
         $count = (Get-ChildItem $dest -Recurse).Count
-        Write-Host "Arquivos copiados: $count"
+        Write-Host "Updates copiados: $count"
 
         if ($count -lt 50) {
           Write-Error "Updates incompletos"
@@ -105,11 +97,14 @@ jobs:
     - name: Debug estrutura
       shell: powershell
       run: |
+        Write-Host "FILES:"
         Get-ChildItem work\out\Files
+
+        Write-Host "ISO:"
         Get-ChildItem work\out\Files\ISO
 
     # =========================
-    # EXECUTAR W10UI
+    # RODAR W10UI
     # =========================
     - name: Rodar W10UI
       run: |
@@ -117,50 +112,39 @@ jobs:
         W10UI.cmd
 
     # =========================
-    # BAIXAR OSCDIMG
-    # =========================
-    - name: Baixar oscdimg
-      shell: powershell
-      run: |
-        Invoke-WebRequest https://raw.githubusercontent.com/erikcas/oscdimg/master/oscdimg.exe -OutFile oscdimg.exe
-
-    # =========================
-    # GERAR ISO FINAL
-    # =========================
-    - name: Criar ISO
-      shell: powershell
-      run: |
-        .\oscdimg.exe -bwork\out\Files\ISO\boot\etfsboot.com -u2 -h -m -o `
-        -bootdata:2#p0,e,bwork\out\Files\ISO\boot\etfsboot.com#pEF,e,bwork\out\Files\ISO\efi\microsoft\boot\efisys.bin `
-        work\out\Files\ISO Windows_11_FULL.iso
-
-    # =========================
-    # VALIDAR ISO (SIMPLES)
+    # VALIDAR ISO FINAL
     # =========================
     - name: Validar ISO
       shell: powershell
       run: |
-        if (!(Test-Path "Windows_11_FULL.iso")) {
-          Write-Error "ISO não foi criada"
+        $iso = Get-ChildItem work\out\Files -Recurse -Filter *.iso | Select-Object -First 1
+
+        if (!$iso) {
+          Write-Error "ISO não foi gerada"
           exit 1
         }
 
-        $size = (Get-Item "Windows_11_FULL.iso").Length
-        Write-Host "Tamanho ISO: $size bytes"
+        $size = $iso.Length
+        Write-Host "ISO: $($iso.FullName)"
+        Write-Host "Tamanho: $size bytes"
 
         if ($size -lt 2GB) {
           Write-Error "ISO inválida"
           exit 1
         }
 
-        Write-Host "ISO OK"
+        Write-Host "=============================="
+        Write-Host "ISO GERADA COM SUCESSO"
+        Write-Host "=============================="
 
     # =========================
-    # SPLIT 1900MB
+    # COMPACTAR
     # =========================
     - name: Compactar ISO
+      shell: powershell
       run: |
-        7z a -tzip -v1900m Windows_11_FULL.zip Windows_11_FULL.iso
+        $iso = Get-ChildItem work\out\Files -Recurse -Filter *.iso | Select-Object -First 1
+        7z a -tzip -v1900m Windows_11_FULL.zip $iso.FullName
 
     # =========================
     # RELEASE
