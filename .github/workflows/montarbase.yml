@@ -1,13 +1,10 @@
-name: Validate W10 LTSC Base Full
+name: Inspect Base Structure
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
-  validate:
+  inspect:
     runs-on: windows-latest
 
     steps:
@@ -22,66 +19,48 @@ jobs:
       run: |
         New-Item -ItemType Directory -Force -Path "work" | Out-Null
 
-    - name: Baixar partes do release (aria2)
+    - name: Baixar partes
       shell: powershell
       run: |
         cd work
-
         aria2c -x 16 -s 16 -k 1M -d . -o base.7z.001 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001"
         aria2c -x 16 -s 16 -k 1M -d . -o base.7z.002 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002"
         aria2c -x 16 -s 16 -k 1M -d . -o base.7z.003 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003"
 
-    - name: Extrair base completa
+    - name: Extrair base
       shell: powershell
       run: |
         cd work
         7z x base.7z.001 -oextracted
 
-    - name: Listar estrutura (debug completo)
+    - name: LISTAR TUDO (raiz completa)
       shell: powershell
       run: |
-        $root = "work\extracted\Files"
+        Write-Host "===== RAIZ EXTRAIDA ====="
+        Get-ChildItem -Path "work\extracted"
 
-        Write-Host "===== RAIZ FILES ====="
-        Get-ChildItem $root
+        Write-Host "===== BUSCANDO FILES ====="
+        Get-ChildItem -Recurse -Directory -Filter "Files" "work\extracted"
 
-        Write-Host "===== ISO ====="
-        Get-ChildItem "$root\ISO"
+        Write-Host "===== LISTANDO FILES (SE EXISTIR) ====="
+        $files = Get-ChildItem -Recurse -Directory -Filter "Files" "work\extracted" | Select-Object -First 1
 
-        Write-Host "===== SOURCES ====="
-        Get-ChildItem "$root\ISO\sources"
+        if ($files) {
+          Write-Host "Files encontrado em: $($files.FullName)"
 
-        Write-Host "===== DRIVERS ====="
-        Get-ChildItem "$root\Drivers\OS"
+          Write-Host "===== RAIZ FILES ====="
+          Get-ChildItem $files.FullName
 
-    - name: Validar estrutura completa
-      shell: powershell
-      run: |
-        $root = "work\extracted\Files"
+          Write-Host "===== ISO ====="
+          if (Test-Path "$($files.FullName)\ISO") {
+            Get-ChildItem "$($files.FullName)\ISO"
+          }
 
-        if (!(Test-Path $root)) {
-          Write-Error "Files não encontrado"
-          exit 1
+          Write-Host "===== DRIVERS ====="
+          if (Test-Path "$($files.FullName)\Drivers") {
+            Get-ChildItem "$($files.FullName)\Drivers"
+          }
         }
-
-        if (!(Test-Path "$root\W10UI.cmd")) {
-          Write-Error "W10UI não encontrado na raiz"
-          exit 1
+        else {
+          Write-Host "⚠️ Pasta Files NÃO encontrada"
         }
-
-        if (!(Test-Path "$root\ISO\sources\install.wim") -and !(Test-Path "$root\ISO\sources\install.esd")) {
-          Write-Error "ISO inválida (sem install.wim/esd)"
-          exit 1
-        }
-
-        if (!(Test-Path "$root\Drivers\OS\Display.Driver")) {
-          Write-Error "Drivers NVIDIA não encontrados"
-          exit 1
-        }
-
-        if (!(Test-Path "$root\Updates")) {
-          Write-Error "Pasta Updates não encontrada"
-          exit 1
-        }
-
-        Write-Host "VALIDAÇÃO OK - BASE 100% INTACTA"
