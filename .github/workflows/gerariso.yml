@@ -15,6 +15,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Instalar dependências
+      shell: powershell
       run: |
         choco install aria2 -y
         choco install 7zip -y
@@ -23,27 +24,41 @@ jobs:
     # WORKDIR
     # =========================
     - name: Criar pasta
-      run: mkdir work
+      shell: powershell
+      run: |
+        New-Item -ItemType Directory -Path work -Force
 
     # =========================
     # BAIXAR BASE
     # =========================
     - name: Baixar base
+      shell: powershell
       run: |
-        cd work
+        Set-Location work
+
         aria2c -x 16 -s 16 -k 1M -o base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
         aria2c -x 16 -s 16 -k 1M -o base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
         aria2c -x 16 -s 16 -k 1M -o base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
 
+    # =========================
+    # EXTRAIR BASE (7ZIP)
+    # =========================
     - name: Extrair base
+      shell: powershell
       run: |
-        cd work
-        7z x base.7z.001 -oout
+        Set-Location work
 
-        if not exist work\out\Files exit 1
+        7z x base.7z.001 -oout -y
+
+        if (!(Test-Path "work\out\Files")) {
+          Write-Error "❌ Pasta Files não encontrada"
+          exit 1
+        }
+
+        Write-Host "✔ Base extraída com sucesso"
 
     # =========================
-    # SUBSTITUIR INI (DO REPO)
+    # APLICAR INI
     # =========================
     - name: Aplicar W10UI.ini
       shell: powershell
@@ -69,25 +84,28 @@ jobs:
         Copy-Item $aria "uup\files\aria2c.exe" -Force
 
     - name: Baixar updates
+      shell: powershell
       run: |
-        cd uup
-        uup_download_windows.cmd
+        Set-Location uup
+        cmd /c uup_download_windows.cmd
 
     # =========================
-    # COPIAR TODOS UPDATES
+    # COPIAR UPDATES
     # =========================
     - name: Copiar updates
       shell: powershell
       run: |
         $dest = "work\out\Files\Updates"
+
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
+
         Copy-Item "uup\*" $dest -Recurse -Force
 
         $count = (Get-ChildItem $dest -Recurse).Count
-        Write-Host "Updates copiados: $count"
+        Write-Host "📦 Updates copiados: $count"
 
         if ($count -lt 50) {
-          Write-Error "Updates incompletos"
+          Write-Error "❌ Updates incompletos"
           exit 1
         }
 
@@ -97,22 +115,20 @@ jobs:
     - name: Debug estrutura
       shell: powershell
       run: |
-        Write-Host "FILES:"
         Get-ChildItem work\out\Files
-
-        Write-Host "ISO:"
         Get-ChildItem work\out\Files\ISO
 
     # =========================
-    # RODAR W10UI
+    # W10UI
     # =========================
     - name: Rodar W10UI
+      shell: powershell
       run: |
-        cd work\out\Files
-        W10UI.cmd
+        Set-Location work\out\Files
+        cmd /c W10UI.cmd
 
     # =========================
-    # VALIDAR ISO FINAL
+    # VALIDAR ISO
     # =========================
     - name: Validar ISO
       shell: powershell
@@ -120,7 +136,7 @@ jobs:
         $iso = Get-ChildItem work\out\Files -Recurse -Filter *.iso | Select-Object -First 1
 
         if (!$iso) {
-          Write-Error "ISO não foi gerada"
+          Write-Error "❌ ISO não foi gerada"
           exit 1
         }
 
@@ -129,16 +145,14 @@ jobs:
         Write-Host "Tamanho: $size bytes"
 
         if ($size -lt 2GB) {
-          Write-Error "ISO inválida"
+          Write-Error "❌ ISO inválida"
           exit 1
         }
 
-        Write-Host "=============================="
-        Write-Host "ISO GERADA COM SUCESSO"
-        Write-Host "=============================="
+        Write-Host "✔ ISO OK"
 
     # =========================
-    # COMPACTAR
+    # COMPACTAR (7ZIP)
     # =========================
     - name: Compactar ISO
       shell: powershell
