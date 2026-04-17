@@ -1,0 +1,127 @@
+name: Build W10 LTSC 21H2 FULL
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Instalar dependências
+      shell: powershell
+      run: |
+        choco install aria2 -y
+        choco install 7zip -y
+
+    - name: Criar pasta de trabalho
+      run: mkdir work
+
+    # =========================
+    # BAIXAR BASE
+    # =========================
+    - name: Baixar base
+      shell: powershell
+      run: |
+        cd work
+        aria2c -x 16 -s 16 -k 1M -o base.7z.001 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001"
+        aria2c -x 16 -s 16 -k 1M -o base.7z.002 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002"
+        aria2c -x 16 -s 16 -k 1M -o base.7z.003 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003"
+
+    - name: Extrair base
+      shell: powershell
+      run: |
+        cd work
+        7z x base.7z.001 -oout
+
+    # =========================
+    # BAIXAR UPDATES
+    # =========================
+    - name: Baixar updates
+      shell: powershell
+      run: |
+        cd work
+        curl.exe -L "https://github.com/Loopz976/ltsc-auto-builder/releases/download/updates/22631.6936_amd64_updates_59fd22e9.zip" -o updates.zip
+
+    - name: Extrair updates
+      shell: powershell
+      run: |
+        cd work
+        7z x updates.zip -oout\Files\Updates
+
+    # =========================
+    # EXECUTAR W10UI
+    # =========================
+    - name: Rodar W10UI automático
+      shell: cmd
+      working-directory: work\out\Files
+      run: |
+        W10UI.cmd
+
+    # =========================
+    # BAIXAR OSCDIMG
+    # =========================
+    - name: Baixar oscdimg
+      shell: powershell
+      run: |
+        Invoke-WebRequest "https://raw.githubusercontent.com/erikcas/oscdimg/master/oscdimg.exe" -OutFile oscdimg.exe
+
+    # =========================
+    # GERAR ISO FINAL
+    # =========================
+    - name: Criar ISO final
+      shell: powershell
+      run: |
+        .\oscdimg.exe -bwork\out\Files\ISO\boot\etfsboot.com -u2 -h -m -o `
+        -bootdata:2#p0,e,bwork\out\Files\ISO\boot\etfsboot.com#pEF,e,bwork\out\Files\ISO\efi\microsoft\boot\efisys.bin `
+        work\out\Files\ISO W10_LTSC_21H2_FULL.iso
+
+    # =========================
+    # VALIDAR ISO (CRÍTICO)
+    # =========================
+    - name: Validar ISO final
+      shell: powershell
+      run: |
+        if (!(Test-Path "W10_LTSC_21H2_FULL.iso")) {
+          Write-Error "ISO não foi criada"
+          exit 1
+        }
+
+        $size = (Get-Item "W10_LTSC_21H2_FULL.iso").Length
+        if ($size -lt 2GB) {
+          Write-Error "ISO muito pequena - erro"
+          exit 1
+        }
+
+        7z x W10_LTSC_21H2_FULL.iso -oiso_check -y
+
+        if (!(Test-Path "iso_check\sources\install.esd")) {
+          Write-Error "install.esd não encontrado"
+          exit 1
+        }
+
+        Write-Host "ISO VALIDADA COM SUCESSO"
+
+    # =========================
+    # DIVIDIR EM PARTES
+    # =========================
+    - name: Compactar em partes (1900MB)
+      shell: powershell
+      run: |
+        7z a -tzip -v1900m W10_LTSC_21H2_FULL.zip W10_LTSC_21H2_FULL.iso
+
+    # =========================
+    # PUBLICAR RELEASE
+    # =========================
+    - name: Criar Release
+      uses: ncipollo/release-action@v1
+      with:
+        tag: w10-ltsc21h2-full-${{ github.run_number }}
+        name: W10 LTSC 21H2 FULL
+        artifacts: W10_LTSC_21H2_FULL.zip.*
+        token: ${{ secrets.GITHUB_TOKEN }}
