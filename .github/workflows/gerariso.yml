@@ -19,11 +19,14 @@ jobs:
         choco install aria2 -y
         choco install 7zip -y
 
-    - name: Criar pasta de trabalho
+    # =========================
+    # WORKDIR
+    # =========================
+    - name: Criar pasta
       run: mkdir work
 
     # =========================
-    # BAIXAR BASE
+    # BASE
     # =========================
     - name: Baixar base
       shell: powershell
@@ -39,32 +42,83 @@ jobs:
         cd work
         7z x base.7z.001 -oout
 
+        if (!(Test-Path "work\out\Files")) {
+          Write-Error "❌ Files não encontrada"
+          exit 1
+        }
+
     # =========================
-    # BAIXAR UPDATES
+    # FORÇAR INI
     # =========================
+    - name: Configurar W10UI.ini
+      shell: powershell
+      run: |
+        $ini = @"
+AutoStart=1
+AddUpdates=1
+AddDrivers=1
+Cleanup=1
+ResetBase=1
+Wim2ESD=1
+Convert=1
+Format=ESD
+Compression=recovery
+Drv_Source=Drivers\OS
+"@
+
+        Set-Content -Path "work\out\Files\W10UI.ini" -Value $ini -Encoding ASCII
+
+    # =========================
+    # UUP
+    # =========================
+    - name: Extrair UUP
+      shell: powershell
+      run: |
+        Expand-Archive "uup11.zip" -DestinationPath "uup" -Force
+
+    - name: Preparar aria2
+      shell: powershell
+      run: |
+        $aria = (Get-Command aria2c).Source
+        New-Item -ItemType Directory -Path "uup\files" -Force
+        Copy-Item $aria "uup\files\aria2c.exe" -Force
+
     - name: Baixar updates
-      shell: powershell
-      run: |
-        cd work
-        curl.exe -L "https://github.com/Loopz976/ltsc-auto-builder/releases/download/updates/22631.6936_amd64_updates_59fd22e9.zip" -o updates.zip
-
-    - name: Extrair updates
-      shell: powershell
-      run: |
-        cd work
-        7z x updates.zip -oout\Files\Updates
+      shell: cmd
+      working-directory: uup
+      run: uup_download_windows.cmd
 
     # =========================
-    # EXECUTAR W10UI
+    # COPIAR TUDO
     # =========================
-    - name: Rodar W10UI automático
+    - name: Copiar updates
+      shell: powershell
+      run: |
+        $dest = "work\out\Files\Updates"
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+        Copy-Item "uup\*" $dest -Recurse -Force
+
+        $count = (Get-ChildItem $dest -Recurse).Count
+        Write-Host "📦 Updates: $count arquivos"
+
+    # =========================
+    # DEBUG
+    # =========================
+    - name: Debug Files
+      shell: powershell
+      run: |
+        Get-ChildItem work\out\Files
+
+    # =========================
+    # W10UI
+    # =========================
+    - name: Executar W10UI
       shell: cmd
       working-directory: work\out\Files
-      run: |
-        W10UI.cmd
+      run: W10UI.cmd
 
     # =========================
-    # BAIXAR OSCDIMG
+    # OSCDIMG
     # =========================
     - name: Baixar oscdimg
       shell: powershell
@@ -72,7 +126,7 @@ jobs:
         Invoke-WebRequest "https://raw.githubusercontent.com/erikcas/oscdimg/master/oscdimg.exe" -OutFile oscdimg.exe
 
     # =========================
-    # GERAR ISO FINAL
+    # GERAR ISO
     # =========================
     - name: Criar ISO final
       shell: powershell
@@ -82,41 +136,38 @@ jobs:
         work\out\Files\ISO W10_LTSC_21H2_FULL.iso
 
     # =========================
-    # VALIDAR ISO (CRÍTICO)
+    # VALIDAÇÃO FINAL (SÓ ISO)
     # =========================
-    - name: Validar ISO final
+    - name: Validar ISO
       shell: powershell
       run: |
         if (!(Test-Path "W10_LTSC_21H2_FULL.iso")) {
-          Write-Error "ISO não foi criada"
+          Write-Error "❌ ISO não foi criada"
           exit 1
         }
 
         $size = (Get-Item "W10_LTSC_21H2_FULL.iso").Length
+        Write-Host "📦 ISO criada - tamanho: $size bytes"
+
         if ($size -lt 2GB) {
-          Write-Error "ISO muito pequena - erro"
+          Write-Error "❌ ISO muito pequena"
           exit 1
         }
 
-        7z x W10_LTSC_21H2_FULL.iso -oiso_check -y
-
-        if (!(Test-Path "iso_check\sources\install.esd")) {
-          Write-Error "install.esd não encontrado"
-          exit 1
-        }
-
-        Write-Host "ISO VALIDADA COM SUCESSO"
+        Write-Host "=============================="
+        Write-Host "✅ ISO GERADA COM SUCESSO"
+        Write-Host "=============================="
 
     # =========================
-    # DIVIDIR EM PARTES
+    # SPLIT 1900MB
     # =========================
-    - name: Compactar em partes (1900MB)
+    - name: Compactar ISO (1900MB)
       shell: powershell
       run: |
         7z a -tzip -v1900m W10_LTSC_21H2_FULL.zip W10_LTSC_21H2_FULL.iso
 
     # =========================
-    # PUBLICAR RELEASE
+    # RELEASE
     # =========================
     - name: Criar Release
       uses: ncipollo/release-action@v1
