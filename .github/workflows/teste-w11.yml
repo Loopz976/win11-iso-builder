@@ -1,59 +1,76 @@
-name: Teste ISO Windows 11
+name: Teste pacote updates Win11
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  teste:
     runs-on: windows-latest
 
     steps:
-    - name: Baixar repositório
+    - name: Checkout repositório
       uses: actions/checkout@v4
 
-    - name: Listar arquivos (debug)
-      run: dir
+    - name: Instalar 7zip
+      run: choco install 7zip -y
 
-    - name: Extrair uup11.zip
+    - name: Verificar arquivos na raiz
       shell: powershell
       run: |
-        if (!(Test-Path "uup11.zip")) {
-          Write-Error "uup11.zip NÃO encontrado na raiz!"
+        Write-Host "=== ARQUIVOS NA RAIZ ==="
+        Get-ChildItem
+
+    - name: Extrair pacote updates
+      shell: powershell
+      run: |
+        if (!(Test-Path "22631.6936_amd64_updates_59fd22e9.zip")) {
+          Write-Error "ZIP NÃO ENCONTRADO NA RAIZ!"
           exit 1
         }
-        Expand-Archive "uup11.zip" -DestinationPath "uup" -Force
 
-    - name: Instalar aria2
+        New-Item -ItemType Directory -Path updates -Force
+        Expand-Archive -Path "22631.6936_amd64_updates_59fd22e9.zip" -DestinationPath "updates" -Force
+
+    - name: Listar conteúdo extraído
       shell: powershell
       run: |
-        choco install aria2 -y
-        $aria = (Get-Command aria2c).Source
-        Copy-Item $aria "uup\files\aria2c.exe" -Force
+        Write-Host "=== CONTEÚDO EXTRAÍDO ==="
+        Get-ChildItem -Recurse updates
 
-    - name: Executar script UUP
-      shell: cmd
-      working-directory: uup
-      run: |
-        uup_download_windows.cmd
-
-    - name: Procurar ISO
+    - name: Validar arquivos importantes
       shell: powershell
       run: |
-        $iso = Get-ChildItem -Recurse -Filter *.iso | Select-Object -First 1
-        if (!$iso) {
-          Write-Error "ISO não encontrada!"
+        $cab = Get-ChildItem -Recurse updates -Filter *.cab
+        $wim = Get-ChildItem -Recurse updates -Filter *.wim
+        $psf = Get-ChildItem -Recurse updates -Filter *.psf
+
+        if (!$cab) {
+          Write-Error "Nenhum .cab encontrado!"
           exit 1
         }
-        Move-Item $iso.FullName WIN11.iso
 
-    - name: Compactar ISO
+        Write-Host "CAB encontrados:" $cab.Count
+        Write-Host "WIM encontrados:" $wim.Count
+        Write-Host "PSF encontrados:" $psf.Count
+
+    - name: Preparar pasta final
       shell: powershell
       run: |
-        7z a -tzip -v1800m WIN11.zip WIN11.iso
+        New-Item -ItemType Directory -Path final\Updates -Force
 
-    - name: Criar release
-      uses: ncipollo/release-action@v1
-      with:
-        tag: teste-${{ github.run_number }}
-        artifacts: WIN11.zip.*
-        token: ${{ secrets.GITHUB_TOKEN }}
+        Get-ChildItem -Recurse updates -Include *.cab, *.msu |
+        Copy-Item -Destination final\Updates -Force
+
+    - name: Verificar resultado final
+      shell: powershell
+      run: |
+        Write-Host "=== UPDATES PRONTOS ==="
+        Get-ChildItem final\Updates
+
+        if (!(Get-ChildItem final\Updates)) {
+          Write-Error "Nenhum update preparado!"
+          exit 1
+        }
+
+    - name: Final
+      run: echo "PACOTE OK - PRONTO PRA INTEGRAR"
