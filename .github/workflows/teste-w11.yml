@@ -1,4 +1,4 @@
-name: Windows ISO AUTO (Completo)
+name: ISO Windows AUTO (11 + 10)
 
 on:
   workflow_dispatch:
@@ -11,12 +11,11 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Baixar script UUP
+    - name: Baixar pacote UUP Win11
       shell: powershell
       run: |
-        Invoke-WebRequest https://github.com/abbodi1406/uupdump/archive/refs/heads/master.zip -OutFile uup.zip
-        Expand-Archive uup.zip -DestinationPath . -Force
-        Rename-Item uupdump-master uup
+        Invoke-WebRequest "https://uupdump.net/get.php?id=22631.1&pack=pt-br&edition=professional&arch=amd64" -OutFile uup.zip
+        Expand-Archive uup.zip -DestinationPath uup -Force
 
     - name: Instalar aria2
       shell: powershell
@@ -25,30 +24,13 @@ jobs:
         $aria = (Get-Command aria2c).Source
         Copy-Item $aria "uup\files\aria2c.exe" -Force
 
-    - name: Detectar build 22631
-      id: build
-      shell: powershell
-      run: |
-        $html = Invoke-WebRequest https://uupdump.net/known.php?q=22631
-        $match = ($html.Content | Select-String -Pattern "22631\.\d+").Matches.Value
-        $latest = ($match | Sort-Object {[version]$_} -Descending)[0]
-        echo "BUILD=$latest" >> $env:GITHUB_OUTPUT
-
-    - name: Configurar
-      shell: powershell
-      run: |
-        cd uup
-        echo ${{ steps.build.outputs.BUILD }} > build.txt
-        echo pt-br > lang.txt
-        echo professional > edition.txt
-
-    - name: Executar UUP
+    - name: Executar UUP Win11
       shell: cmd
       working-directory: uup
       run: |
         uup_download_windows.cmd
 
-    - name: Compactar ISO
+    - name: Compactar ISO Win11
       shell: powershell
       run: |
         $iso = Get-ChildItem -Recurse -Filter *.iso | Select-Object -First 1
@@ -57,7 +39,7 @@ jobs:
     - name: Release Win11
       uses: ncipollo/release-action@v1
       with:
-        tag: win11-${{ steps.build.outputs.BUILD }}
+        tag: win11-${{ github.run_number }}
         artifacts: WIN11.zip.*
         token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -66,12 +48,11 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Baixar script UUP
+    - name: Baixar pacote UUP Win10
       shell: powershell
       run: |
-        Invoke-WebRequest https://github.com/abbodi1406/uupdump/archive/refs/heads/master.zip -OutFile uup.zip
-        Expand-Archive uup.zip -DestinationPath . -Force
-        Rename-Item uupdump-master uup
+        Invoke-WebRequest "https://uupdump.net/get.php?id=19045.1&pack=pt-br&edition=professional&arch=amd64&windows=10" -OutFile uup.zip
+        Expand-Archive uup.zip -DestinationPath uup -Force
 
     - name: Instalar aria2
       shell: powershell
@@ -80,30 +61,13 @@ jobs:
         $aria = (Get-Command aria2c).Source
         Copy-Item $aria "uup\files\aria2c.exe" -Force
 
-    - name: Detectar build 19045
-      id: build
-      shell: powershell
-      run: |
-        $html = Invoke-WebRequest https://uupdump.net/known.php?q=19045
-        $match = ($html.Content | Select-String -Pattern "19045\.\d+").Matches.Value
-        $latest = ($match | Sort-Object {[version]$_} -Descending)[0]
-        echo "BUILD=$latest" >> $env:GITHUB_OUTPUT
-
-    - name: Configurar
-      shell: powershell
-      run: |
-        cd uup
-        echo ${{ steps.build.outputs.BUILD }} > build.txt
-        echo pt-br > lang.txt
-        echo professional > edition.txt
-
-    - name: Executar UUP
+    - name: Executar UUP Win10
       shell: cmd
       working-directory: uup
       run: |
         uup_download_windows.cmd
 
-    - name: Compactar ISO
+    - name: Compactar ISO Win10
       shell: powershell
       run: |
         $iso = Get-ChildItem -Recurse -Filter *.iso | Select-Object -First 1
@@ -112,6 +76,6 @@ jobs:
     - name: Release Win10
       uses: ncipollo/release-action@v1
       with:
-        tag: win10-${{ steps.build.outputs.BUILD }}
+        tag: win10-${{ github.run_number }}
         artifacts: WIN10.zip.*
         token: ${{ secrets.GITHUB_TOKEN }}
