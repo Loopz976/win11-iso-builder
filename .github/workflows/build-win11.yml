@@ -12,31 +12,31 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v4
 
-    - name: Extrair pacote UUP do Windows 11
+    - name: Extrair pacote UUP
       shell: powershell
       run: |
-        Expand-Archive -Path "22631.6936_amd64_pt-br_professional_59fd22e9_convert.zip" -DestinationPath "." -Force
+        New-Item -ItemType Directory -Path uup -Force
+        Expand-Archive -Path "22631.6936_amd64_pt-br_professional_59fd22e9_convert.zip" -DestinationPath "uup" -Force
 
-        $folder = Get-ChildItem -Directory | Select-Object -First 1
-        if ($folder) {
-          Rename-Item -Path $folder.FullName -NewName "uup"
-        } else {
-          Write-Error "Pasta não encontrada após extração"
+        if (!(Test-Path "uup\uup_download_windows.cmd")) {
+          Write-Error "Arquivo uup_download_windows.cmd NÃO encontrado!"
+          Get-ChildItem -Recurse
           exit 1
         }
 
     - name: Desabilitar get_aria2.ps1
       shell: powershell
       run: |
-        $script = "uup/files/get_aria2.ps1"
+        $script = "uup\files\get_aria2.ps1"
         if (Test-Path $script) {
-          Set-Content -Path $script -Value "Write-Host 'Ignorado'; exit 0"
+          Set-Content -Path $script -Value "exit 0"
         }
 
     - name: Executar script UUP
       shell: cmd
       working-directory: uup
       run: |
+        dir
         uup_download_windows.cmd
 
     - name: Encontrar ISO gerada
@@ -53,8 +53,7 @@ jobs:
     - name: Dividir ISO (1.8GB)
       shell: powershell
       run: |
-        $iso = "${{ steps.findiso.outputs.iso_path }}"
-        7z a -tzip -v1800m "WIN11_ISO_PARTS.zip" "$iso"
+        7z a -tzip -v1800m "WIN11_ISO_PARTS.zip" "${{ steps.findiso.outputs.iso_path }}"
 
     - name: Criar release e enviar ISO
       uses: ncipollo/release-action@v1
