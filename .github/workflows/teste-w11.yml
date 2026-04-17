@@ -8,32 +8,35 @@ jobs:
     runs-on: windows-latest
 
     steps:
+    - name: Baixar UUP Dump Converter
+      shell: powershell
+      run: |
+        Invoke-WebRequest https://github.com/uup-dump/uup-dump/archive/refs/heads/master.zip -OutFile uup.zip
+        Expand-Archive uup.zip -DestinationPath . -Force
+        Rename-Item uup-dump-master uup
+
     - name: Instalar aria2
       shell: powershell
       run: |
         choco install aria2 -y
-
-    - name: Baixar pacote UUP (Win11 Pro PT-BR)
-      shell: powershell
-      run: |
-        Invoke-WebRequest -Uri "https://uupdump.net/download.php?id=22631.2861&pack=pt-br&edition=professional&arch=amd64" -OutFile "uup.zip"
-        Expand-Archive uup.zip -DestinationPath uup -Force
-
-    - name: Preparar aria2
-      shell: powershell
-      run: |
         $aria = (Get-Command aria2c).Source
-        New-Item -ItemType Directory -Path "uup\files" -Force
         Copy-Item $aria "uup\files\aria2c.exe" -Force
 
-    - name: Executar UUP
+    - name: Configurar build manual (Win11 Pro)
+      shell: powershell
+      run: |
+        cd uup
+        echo 22631.2861 > build.txt
+        echo pt-br > lang.txt
+        echo professional > edition.txt
+
+    - name: Executar script
       shell: cmd
       working-directory: uup
       run: |
         uup_download_windows.cmd
 
-    - name: Verificar ISO gerada
+    - name: Verificar ISO
       shell: powershell
       run: |
-        Write-Host "ISO encontrada:"
         Get-ChildItem -Recurse -Filter *.iso
