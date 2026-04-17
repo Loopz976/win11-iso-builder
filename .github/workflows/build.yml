@@ -1,51 +1,10 @@
-name: Build ISO Windows 11
+name: Teste Workflow
 
 on:
 workflow_dispatch:
 
 jobs:
-build:
+test:
 runs-on: ubuntu-latest
-
 steps:
-- name: Checkout
-  uses: actions/checkout@v4
-
-- name: Instalar dependências
-  run: |
-    sudo apt update
-    sudo apt install -y aria2 cabextract wimtools genisoimage unzip
-
-- name: Extrair ZIP UUP
-  run: |
-    unzip *.zip -d uup
-
-- name: Rodar UUP Dump
-  run: |
-    cd uup
-    chmod +x *.sh
-    ./uup_download_linux.sh
-
-- name: Converter para ESD (máxima compressão)
-  run: |
-    cd uup
-    if [ -f install.wim ]; then
-      sudo wimlib-imagex export install.wim all install.esd --compress=recovery
-      rm install.wim
-    fi
-
-- name: Criar ISO
-  run: |
-    cd uup
-    genisoimage -o Win11.iso \
-    -b boot/etfsboot.com \
-    -no-emul-boot -boot-load-size 8 \
-    -eltorito-alt-boot \
-    -e efi/microsoft/boot/efisys.bin \
-    -no-emul-boot -udf -J -l .
-
-- name: Upload Artifact
-  uses: actions/upload-artifact@v4
-  with:
-    name: Windows-ISO
-    path: uup/*.iso
+- run: echo "OK"
