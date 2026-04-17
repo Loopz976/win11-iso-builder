@@ -1,0 +1,39 @@
+name: Teste Windows 11 AUTO
+
+on:
+  workflow_dispatch:
+
+jobs:
+  teste:
+    runs-on: windows-latest
+
+    steps:
+    - name: Instalar aria2
+      shell: powershell
+      run: |
+        choco install aria2 -y
+
+    - name: Baixar pacote UUP (Win11 Pro PT-BR)
+      shell: powershell
+      run: |
+        Invoke-WebRequest -Uri "https://uupdump.net/download.php?id=latest&pack=pt-br&edition=professional&arch=amd64" -OutFile "uup.zip"
+        Expand-Archive uup.zip -DestinationPath uup -Force
+
+    - name: Preparar aria2
+      shell: powershell
+      run: |
+        $aria = (Get-Command aria2c).Source
+        New-Item -ItemType Directory -Path "uup\files" -Force
+        Copy-Item $aria "uup\files\aria2c.exe" -Force
+
+    - name: Executar UUP
+      shell: cmd
+      working-directory: uup
+      run: |
+        uup_download_windows.cmd
+
+    - name: Verificar ISO gerada
+      shell: powershell
+      run: |
+        Write-Host "Procurando ISO..."
+        Get-ChildItem -Recurse -Filter *.iso
