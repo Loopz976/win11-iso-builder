@@ -19,102 +19,99 @@ jobs:
         choco install aria2 -y
         choco install 7zip -y
 
+    # =========================
+    # WORKDIR
+    # =========================
     - name: Prepare workspace
       shell: powershell
       run: |
-        $work = "$env:GITHUB_WORKSPACE\work"
-        New-Item -ItemType Directory -Path $work -Force
-        echo "WORK=$work" >> $env:GITHUB_ENV
+        New-Item -ItemType Directory -Path work -Force
 
     # =========================
-    # DOWNLOAD BASE
+    # BASE
     # =========================
     - name: Download base
       shell: powershell
       run: |
-        Set-Location $env:WORK
-
+        cd work
         aria2c -o base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
         aria2c -o base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
         aria2c -o base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
 
-    # =========================
-    # EXTRACT BASE
-    # =========================
     - name: Extract base
       shell: powershell
       run: |
-        Set-Location $env:WORK
-
-        7z x base.7z.001 -o"$env:WORK\out" -y
-
-        if (!(Test-Path "$env:WORK\out\Files")) {
-          Write-Error "Files not found"
-          exit 1
-        }
+        cd work
+        7z x base.7z.001 -oout -y
 
     # =========================
-    # CRIAR INI DIRETO (FIX TOTAL)
+    # INI
     # =========================
     - name: Create W10UI.ini
       shell: powershell
       run: |
-        $ini = "$env:WORK\out\Files\W10UI.ini"
-
-        Remove-Item $ini -ErrorAction SilentlyContinue
-
-        Add-Content $ini "AutoStart=1"
-        Add-Content $ini "AddUpdates=1"
-        Add-Content $ini "AddDrivers=1"
-        Add-Content $ini "Cleanup=1"
-        Add-Content $ini "ResetBase=1"
-        Add-Content $ini "Wim2ESD=1"
-        Add-Content $ini "Convert=1"
-        Add-Content $ini "Format=ESD"
-        Add-Content $ini "Compression=recovery"
-        Add-Content $ini "Drv_Source=Drivers\OS"
-
-        Write-Host "INI created"
+        @"
+AutoStart=1
+AddUpdates=1
+AddDrivers=1
+Cleanup=1
+ResetBase=1
+Wim2ESD=1
+Convert=1
+Format=ESD
+Compression=recovery
+Drv_Source=Drivers\OS
+"@ | Out-File -Encoding ASCII "work\out\Files\W10UI.ini"
 
     # =========================
-    # UUP
+    # UUP (SEU CÓDIGO FUNCIONAL)
     # =========================
     - name: Extract UUP
       shell: powershell
       run: |
-        Expand-Archive "$env:GITHUB_WORKSPACE\uup11.zip" -DestinationPath "$env:GITHUB_WORKSPACE\uup" -Force
+        New-Item -ItemType Directory -Path uup -Force
+
+        $zip = Get-ChildItem -Filter *.zip | Select-Object -First 1
+
+        if (!$zip) { exit 1 }
+
+        7z x $zip.FullName -ouup -y
+
+        if (!(Test-Path "uup\uup_download_windows.cmd")) {
+          exit 1
+        }
 
     - name: Prepare aria2
       shell: powershell
       run: |
         $aria = (Get-Command aria2c).Source
-        New-Item -ItemType Directory -Path "$env:GITHUB_WORKSPACE\uup\files" -Force
-        Copy-Item $aria "$env:GITHUB_WORKSPACE\uup\files\aria2c.exe" -Force
+        New-Item -ItemType Directory -Path "uup\files" -Force
+        Copy-Item $aria "uup\files\aria2c.exe" -Force
 
-    - name: Download updates
-      shell: powershell
-      run: |
-        Set-Location "$env:GITHUB_WORKSPACE\uup"
-        cmd /c uup_download_windows.cmd
+    # 🔥 AQUI ESTÁ O FIX REAL
+    - name: Run UUP (CORRETO)
+      shell: cmd
+      working-directory: uup
+      run: uup_download_windows.cmd
 
     # =========================
-    # COPY UPDATES
+    # COPIAR PARA FILES
     # =========================
     - name: Copy updates
       shell: powershell
       run: |
-        $dest = "$env:WORK\out\Files\Updates"
+        $dest = "work\out\Files\Updates"
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
-        Copy-Item "$env:GITHUB_WORKSPACE\uup\*" $dest -Recurse -Force
+
+        Copy-Item "uup\*" $dest -Recurse -Force
 
     # =========================
-    # RUN W10UI
+    # W10UI
     # =========================
     - name: Run W10UI
-      shell: powershell
-      run: |
-        Set-Location "$env:WORK\out\Files"
-        cmd /c W10UI.cmd
+      shell: cmd
+      working-directory: work\out\Files
+      run: W10UI.cmd
 
     # =========================
     # VALIDATE ISO
@@ -122,8 +119,7 @@ jobs:
     - name: Validate ISO
       shell: powershell
       run: |
-        $iso = Get-ChildItem "$env:WORK\out\Files" -Recurse -Filter *.iso | Select-Object -First 1
-
+        $iso = Get-ChildItem work\out\Files -Recurse -Filter *.iso | Select-Object -First 1
         if (!$iso) { exit 1 }
         if ($iso.Length -lt 2GB) { exit 1 }
 
@@ -133,12 +129,11 @@ jobs:
     - name: Compress ISO
       shell: powershell
       run: |
-        $iso = Get-ChildItem "$env:WORK\out\Files" -Recurse -Filter *.iso | Select-Object -First 1
+        $iso = Get-ChildItem work\out\Files -Recurse -Filter *.iso | Select-Object -First 1
         7z a -tzip -v1900m Windows_11_FULL.zip $iso.FullName
 
     # =========================
     # RELEASE
-    # =========================
     - name: Release
       uses: ncipollo/release-action@v1
       with:
