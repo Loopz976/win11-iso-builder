@@ -1,62 +1,72 @@
-name: Windows ISO Direct (FINAL ESTÁVEL)
+name: Build Windows 11 ISO (UUP)
 
 on:
-  workflow_dispatch:
+workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: windows-latest
+build:
+runs-on: ubuntu-latest
+timeout-minutes: 120
 
-    steps:
-    - uses: actions/checkout@v4
+steps:
+- name: 📥 Checkout do repositório
+  uses: actions/checkout@v4
 
-    # 1. Baixar ISO pronta (SUBSTITUA PELO SEU LINK)
-    - name: Baixar ISO
-      run: |
-        curl -L -o windows.iso "COLE_AQUI_O_LINK_DA_ISO"
+- name: 🧰 Instalar dependências
+  run: |
+    sudo apt update
+    sudo apt install -y aria2 cabextract wimtools genisoimage unzip p7zip-full
 
-    # 2. Montar ISO
-    - name: Montar ISO
-      shell: powershell
-      run: |
-        Mount-DiskImage -ImagePath windows.iso
-        $drive = (Get-DiskImage windows.iso | Get-Volume).DriveLetter
-        echo "DRIVE=$drive:" >> $env:GITHUB_ENV
+- name: 📦 Encontrar e extrair ZIP do UUP
+  run: |
+    FILE=$(ls *.zip | head -n 1)
+    echo "Usando pacote: $FILE"
+    unzip "$FILE" -d uup
 
-    # 3. Copiar conteúdo
-    - name: Copiar arquivos
-      run: |
-        mkdir work
-        xcopy %DRIVE%\* work /E /I /Y
+- name: 🚀 Rodar script do UUP (Linux)
+  run: |
+    cd uup
+    chmod +x *.sh
+    ./uup_download_linux.sh
 
-    # 4. Converter WIM → ESD (compressão máxima)
-    - name: Converter ESD MAX
-      shell: cmd
-      run: |
-        dism /Export-Image ^
-        /SourceImageFile:work\sources\install.wim ^
-        /SourceIndex:1 ^
-        /DestinationImageFile:work\sources\install.esd ^
-        /Compress:recovery
+- name: 🧱 Converter WIM → ESD (compressão máxima)
+  run: |
+    cd uup
+    if [ -f install.wim ]; then
+      echo "Convertendo para ESD..."
+      sudo wimlib-imagex export install.wim all install.esd --compress=recovery
+      rm install.wim
+    else
+      echo "install.wim não encontrado, pulando..."
+    fi
 
-    # 5. Remover WIM antigo
-    - name: Limpeza
-      run: |
-        del work\sources\install.wim
+- name: 📀 Recriar ISO otimizada
+  run: |
+    cd uup
 
-    # 6. Split 1900MB
-    - name: Dividir arquivo
-      shell: bash
-      run: |
-        mkdir split
-        split -b 1900M work/sources/install.esd split/install.esd.part-
+    ISO_NAME="Win11_23H2_$(date +%Y%m%d)_Ultra.iso"
 
-    # 7. Upload Release
-    - name: Upload Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: win11-iso-direct
-        name: Windows ISO Direct (ESD MAX)
-        files: split/*
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    genisoimage -o "$ISO_NAME" \
+    -b boot/etfsboot.com \
+    -no-emul-boot -boot-load-size 8 \
+    -eltorito-alt-boot \
+    -e efi/microsoft/boot/efisys.bin \
+    -no-emul-boot \
+    -udf -J -l .
+
+    echo "ISO criada: $ISO_NAME"
+
+- name: 📤 Upload como artifact (backup)
+  uses: actions/upload-artifact@v4
+  with:
+    name: windows-iso
+    path: uup/*.iso
+
+- name: 🚀 Publicar no GitHub Releases
+  uses: softprops/action-gh-release@v2
+  with:
+    tag_name: win11-${{ github.run_number }}
+    name: Windows 11 23H2 Build ${{ github.run_number }}
+    files: uup/*.iso
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
