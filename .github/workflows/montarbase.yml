@@ -1,10 +1,10 @@
-name: Inspect Base Structure
+name: Check Release Files Structure
 
 on:
   workflow_dispatch:
 
 jobs:
-  inspect:
+  check:
     runs-on: windows-latest
 
     steps:
@@ -14,53 +14,74 @@ jobs:
         choco install aria2 -y
         choco install 7zip -y
 
-    - name: Criar pasta de trabalho
+    - name: Criar pasta
       shell: powershell
       run: |
-        New-Item -ItemType Directory -Force -Path "work" | Out-Null
+        New-Item -ItemType Directory -Force -Path work | Out-Null
 
-    - name: Baixar partes
-      shell: powershell
-      run: |
-        cd work
-        aria2c -x 16 -s 16 -k 1M -d . -o base.7z.001 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001"
-        aria2c -x 16 -s 16 -k 1M -d . -o base.7z.002 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002"
-        aria2c -x 16 -s 16 -k 1M -d . -o base.7z.003 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003"
-
-    - name: Extrair base
+    - name: Baixar release (3 partes)
       shell: powershell
       run: |
         cd work
-        7z x base.7z.001 -oextracted
 
-    - name: LISTAR TUDO (raiz completa)
+        aria2c -x 16 -s 16 -k 1M -o base.7z.001 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001"
+        aria2c -x 16 -s 16 -k 1M -o base.7z.002 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002"
+        aria2c -x 16 -s 16 -k 1M -o base.7z.003 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003"
+
+    - name: Extrair tudo
       shell: powershell
       run: |
-        Write-Host "===== RAIZ EXTRAIDA ====="
-        Get-ChildItem -Path "work\extracted"
+        cd work
+        7z x base.7z.001 -oout
 
-        Write-Host "===== BUSCANDO FILES ====="
-        Get-ChildItem -Recurse -Directory -Filter "Files" "work\extracted"
-
-        Write-Host "===== LISTANDO FILES (SE EXISTIR) ====="
-        $files = Get-ChildItem -Recurse -Directory -Filter "Files" "work\extracted" | Select-Object -First 1
+    - name: Localizar pasta Files
+      shell: powershell
+      run: |
+        $files = Get-ChildItem -Path work\out -Recurse -Directory -Filter "Files" | Select-Object -First 1
 
         if ($files) {
-          Write-Host "Files encontrado em: $($files.FullName)"
+          Write-Host "FILES ENCONTRADA EM:"
+          Write-Host $files.FullName
+        } else {
+          Write-Host "FILES NÃO ENCONTRADA"
+        }
 
+    - name: Listar raiz de Files
+      shell: powershell
+      run: |
+        $files = Get-ChildItem -Path work\out -Recurse -Directory -Filter "Files" | Select-Object -First 1
+
+        if ($files) {
           Write-Host "===== RAIZ FILES ====="
           Get-ChildItem $files.FullName
-
-          Write-Host "===== ISO ====="
-          if (Test-Path "$($files.FullName)\ISO") {
-            Get-ChildItem "$($files.FullName)\ISO"
-          }
-
-          Write-Host "===== DRIVERS ====="
-          if (Test-Path "$($files.FullName)\Drivers") {
-            Get-ChildItem "$($files.FullName)\Drivers"
-          }
         }
-        else {
-          Write-Host "⚠️ Pasta Files NÃO encontrada"
+
+    - name: Listar ISO
+      shell: powershell
+      run: |
+        $files = Get-ChildItem -Path work\out -Recurse -Directory -Filter "Files" | Select-Object -First 1
+
+        if ($files -and (Test-Path "$($files.FullName)\ISO")) {
+          Write-Host "===== ISO ====="
+          Get-ChildItem "$($files.FullName)\ISO"
+        }
+
+    - name: Listar SOURCES
+      shell: powershell
+      run: |
+        $files = Get-ChildItem -Path work\out -Recurse -Directory -Filter "Files" | Select-Object -First 1
+
+        if ($files -and (Test-Path "$($files.FullName)\ISO\sources")) {
+          Write-Host "===== SOURCES ====="
+          Get-ChildItem "$($files.FullName)\ISO\sources"
+        }
+
+    - name: Listar DRIVERS
+      shell: powershell
+      run: |
+        $files = Get-ChildItem -Path work\out -Recurse -Directory -Filter "Files" | Select-Object -First 1
+
+        if ($files -and (Test-Path "$($files.FullName)\Drivers")) {
+          Write-Host "===== DRIVERS ====="
+          Get-ChildItem "$($files.FullName)\Drivers"
         }
