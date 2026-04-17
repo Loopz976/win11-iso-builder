@@ -1,4 +1,4 @@
-name: windows-11-iso-builder
+name: windows-11-custom-builder
 
 on:
   workflow_dispatch:
@@ -31,16 +31,18 @@ jobs:
         New-Item -ItemType Directory -Path work -Force
 
     # =========================
-    # DOWNLOAD BASE
+    # DOWNLOAD BASE (MULTIPART)
     # =========================
     - name: Download base
       shell: powershell
       run: |
         cd work
 
-        aria2c -o base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
-        aria2c -o base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
-        aria2c -o base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
+        aria2c -x 16 -s 16 -k 1M -o base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
+        aria2c -x 16 -s 16 -k 1M -o base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
+        aria2c -x 16 -s 16 -k 1M -o base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
+
+        Get-ChildItem
 
     # =========================
     # EXTRAIR BASE
@@ -49,15 +51,32 @@ jobs:
       shell: powershell
       run: |
         cd work
+
         7z x base.7z.001 -oout -y
 
         if (!(Test-Path "out\Files")) {
-          Write-Error "Files nao encontrado"
+          Write-Error "ERRO: Files nao encontrado"
           exit 1
         }
 
+        Write-Host "Base extraida com sucesso"
+
     # =========================
-    # EXTRAIR UUP
+    # VALIDAR ESTRUTURA BASE
+    # =========================
+    - name: Validate base structure
+      shell: powershell
+      run: |
+        $base = "work\out\Files"
+
+        if (!(Test-Path "$base\W10UI.cmd")) { exit 1 }
+        if (!(Test-Path "$base\W10UI.ini")) { exit 1 }
+        if (!(Test-Path "$base\ISO")) { exit 1 }
+
+        Write-Host "Estrutura OK"
+
+    # =========================
+    # EXTRAIR UUP (ZIP DO REPO)
     # =========================
     - name: Extract UUP
       shell: powershell
@@ -78,6 +97,8 @@ jobs:
           exit 1
         }
 
+        Write-Host "UUP pronto"
+
     # =========================
     # PREPARAR ARIA2
     # =========================
@@ -88,7 +109,7 @@ jobs:
         Copy-Item $aria "uup\aria2c.exe" -Force
 
     # =========================
-    # RODAR UUP (CORRETO)
+    # BAIXAR UPDATES (REAL)
     # =========================
     - name: Run UUP download
       shell: cmd
@@ -96,12 +117,13 @@ jobs:
       run: uup_download_windows.cmd
 
     # =========================
-    # COPIAR UPDATES
+    # COPIAR UPDATES PARA BASE
     # =========================
     - name: Copy updates
       shell: powershell
       run: |
         $dest = "work\out\Files\Updates"
+
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
         Copy-Item "uup\*" $dest -Recurse -Force
@@ -110,12 +132,12 @@ jobs:
         Write-Host "Arquivos copiados: $count"
 
         if ($count -lt 50) {
-          Write-Error "Download incompleto"
+          Write-Error "ERRO: Updates incompletos"
           exit 1
         }
 
     # =========================
-    # RODAR W10UI (SEM INTERFERÊNCIA)
+    # EXECUTAR W10UI (AUTOMATICO)
     # =========================
     - name: Run W10UI
       shell: cmd
@@ -123,7 +145,7 @@ jobs:
       run: W10UI.cmd
 
     # =========================
-    # VALIDAR ISO
+    # VALIDAR ISO FINAL
     # =========================
     - name: Validate ISO
       shell: powershell
@@ -140,24 +162,25 @@ jobs:
           exit 1
         }
 
-        Write-Host "ISO OK"
+        Write-Host "ISO OK: $($iso.FullName)"
 
     # =========================
-    # COMPACTAR
+    # COMPACTAR EM PARTES
     # =========================
     - name: Compress ISO
       shell: powershell
       run: |
         $iso = Get-ChildItem work\out\Files -Recurse -Filter *.iso | Select-Object -First 1
-        7z a -tzip -v1900m Windows_11_FULL.zip $iso.FullName
+
+        7z a -tzip -v1900m Windows_11_CUSTOM.zip $iso.FullName
 
     # =========================
-    # RELEASE
+    # RELEASE FINAL
     # =========================
     - name: Create Release
       uses: ncipollo/release-action@v1
       with:
-        tag: windows-11-full-${{ github.run_number }}
-        name: Windows 11 FULL ISO
-        artifacts: Windows_11_FULL.zip.*
+        tag: windows-11-custom-${{ github.run_number }}
+        name: Windows 11 CUSTOM ISO
+        artifacts: Windows_11_CUSTOM.zip.*
         token: ${{ secrets.GITHUB_TOKEN }}
