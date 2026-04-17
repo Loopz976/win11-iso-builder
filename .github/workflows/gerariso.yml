@@ -20,15 +20,18 @@ jobs:
         choco install aria2 -y
         choco install 7zip -y
 
+    # =========================
+    # WORKDIR
+    # =========================
     - name: Create work dir
       shell: powershell
       run: |
         New-Item -ItemType Directory -Path work -Force
 
     # =========================
-    # DOWNLOAD BASE
+    # DOWNLOAD BASE (MESMA PASTA)
     # =========================
-    - name: Download base
+    - name: Download base parts
       shell: powershell
       run: |
         Set-Location work
@@ -37,22 +40,27 @@ jobs:
         aria2c -x 16 -s 16 -k 1M -o base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
         aria2c -x 16 -s 16 -k 1M -o base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
 
+        Write-Host "Parts downloaded"
+        Get-ChildItem
+
     # =========================
-    # EXTRACT BASE
+    # EXTRAÇÃO CORRETA MULTIPART
     # =========================
-    - name: Extract base
+    - name: Extract base (multipart)
       shell: powershell
       run: |
         Set-Location work
 
+        # IMPORTANTE: só extrai pelo .001
         7z x base.7z.001 -oout -y
 
-        if (!(Test-Path "work\out\Files")) {
-          Write-Error "Files folder not found"
+        if (!(Test-Path "out\Files")) {
+          Write-Error "Files folder not found after extraction"
           exit 1
         }
 
-        Write-Host "Base extracted OK"
+        Write-Host "Extraction OK"
+        Get-ChildItem out
 
     # =========================
     # APPLY INI
@@ -98,21 +106,12 @@ jobs:
         Copy-Item "uup\*" $dest -Recurse -Force
 
         $count = (Get-ChildItem $dest -Recurse).Count
-        Write-Host "Updates count: $count"
+        Write-Host "Updates: $count"
 
         if ($count -lt 50) {
           Write-Error "Updates incomplete"
           exit 1
         }
-
-    # =========================
-    # DEBUG
-    # =========================
-    - name: Debug structure
-      shell: powershell
-      run: |
-        Get-ChildItem work\out\Files
-        Get-ChildItem work\out\Files\ISO
 
     # =========================
     # RUN W10UI
