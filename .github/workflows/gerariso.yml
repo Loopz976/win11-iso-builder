@@ -102,21 +102,25 @@ jobs:
       run: uup_download_windows.cmd
 
     # =========================
-    # COPIAR UPDATES (FIX FINAL)
+    # COPIAR UPDATES (CORRETO FINAL)
     # =========================
     - name: Copy updates
       shell: powershell
       run: |
+        $source = "uup\UUPs"
         $dest = "work\out\Files\Updates"
+
+        if (!(Test-Path $source)) {
+          Write-Error "Pasta UUPs nao encontrada"
+          exit 1
+        }
+
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
-        $files = Get-ChildItem -Path "uup" -Recurse -File |
-          Where-Object {
-            $_.Extension -in ".cab", ".msu", ".psf", ".wim"
-          }
+        $files = Get-ChildItem -Path $source -Recurse -File
 
         if (!$files -or $files.Count -eq 0) {
-          Write-Error "Nenhum update encontrado"
+          Write-Error "Nenhum arquivo encontrado em UUPs"
           exit 1
         }
 
