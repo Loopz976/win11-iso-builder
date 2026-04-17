@@ -14,24 +14,21 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Instalar dependências
+    - name: Install deps
       shell: powershell
       run: |
         choco install aria2 -y
         choco install 7zip -y
 
-    # =========================
-    # WORKDIR
-    # =========================
-    - name: Criar pasta
+    - name: Create work dir
       shell: powershell
       run: |
         New-Item -ItemType Directory -Path work -Force
 
     # =========================
-    # BAIXAR BASE
+    # DOWNLOAD BASE
     # =========================
-    - name: Baixar base
+    - name: Download base
       shell: powershell
       run: |
         Set-Location work
@@ -41,9 +38,9 @@ jobs:
         aria2c -x 16 -s 16 -k 1M -o base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
 
     # =========================
-    # EXTRAIR BASE (7ZIP)
+    # EXTRACT BASE
     # =========================
-    - name: Extrair base
+    - name: Extract base
       shell: powershell
       run: |
         Set-Location work
@@ -51,110 +48,108 @@ jobs:
         7z x base.7z.001 -oout -y
 
         if (!(Test-Path "work\out\Files")) {
-          Write-Error "❌ Pasta Files não encontrada"
+          Write-Error "Files folder not found"
           exit 1
         }
 
-        Write-Host "✔ Base extraída com sucesso"
+        Write-Host "Base extracted OK"
 
     # =========================
-    # APLICAR INI
+    # APPLY INI
     # =========================
-    - name: Aplicar W10UI.ini
+    - name: Apply W10UI.ini
       shell: powershell
       run: |
         Copy-Item "W10UI.ini" "work\out\Files\W10UI.ini" -Force
 
-        Write-Host "INI aplicado:"
+        Write-Host "INI applied"
         Get-Content "work\out\Files\W10UI.ini"
 
     # =========================
     # UUP
     # =========================
-    - name: Extrair UUP
+    - name: Extract UUP
       shell: powershell
       run: |
         Expand-Archive "uup11.zip" -DestinationPath "uup" -Force
 
-    - name: Preparar aria2
+    - name: Prepare aria2
       shell: powershell
       run: |
         $aria = (Get-Command aria2c).Source
         New-Item -ItemType Directory -Path "uup\files" -Force
         Copy-Item $aria "uup\files\aria2c.exe" -Force
 
-    - name: Baixar updates
+    - name: Download updates
       shell: powershell
       run: |
         Set-Location uup
         cmd /c uup_download_windows.cmd
 
     # =========================
-    # COPIAR UPDATES
+    # COPY UPDATES
     # =========================
-    - name: Copiar updates
+    - name: Copy updates
       shell: powershell
       run: |
         $dest = "work\out\Files\Updates"
 
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
-
         Copy-Item "uup\*" $dest -Recurse -Force
 
         $count = (Get-ChildItem $dest -Recurse).Count
-        Write-Host "📦 Updates copiados: $count"
+        Write-Host "Updates count: $count"
 
         if ($count -lt 50) {
-          Write-Error "❌ Updates incompletos"
+          Write-Error "Updates incomplete"
           exit 1
         }
 
     # =========================
     # DEBUG
     # =========================
-    - name: Debug estrutura
+    - name: Debug structure
       shell: powershell
       run: |
         Get-ChildItem work\out\Files
         Get-ChildItem work\out\Files\ISO
 
     # =========================
-    # W10UI
+    # RUN W10UI
     # =========================
-    - name: Rodar W10UI
+    - name: Run W10UI
       shell: powershell
       run: |
         Set-Location work\out\Files
         cmd /c W10UI.cmd
 
     # =========================
-    # VALIDAR ISO
+    # VALIDATE ISO
     # =========================
-    - name: Validar ISO
+    - name: Validate ISO
       shell: powershell
       run: |
         $iso = Get-ChildItem work\out\Files -Recurse -Filter *.iso | Select-Object -First 1
 
         if (!$iso) {
-          Write-Error "❌ ISO não foi gerada"
+          Write-Error "ISO not generated"
           exit 1
         }
 
         $size = $iso.Length
-        Write-Host "ISO: $($iso.FullName)"
-        Write-Host "Tamanho: $size bytes"
+        Write-Host "ISO size: $size"
 
         if ($size -lt 2GB) {
-          Write-Error "❌ ISO inválida"
+          Write-Error "ISO too small"
           exit 1
         }
 
-        Write-Host "✔ ISO OK"
+        Write-Host "ISO OK"
 
     # =========================
-    # COMPACTAR (7ZIP)
+    # COMPRESS
     # =========================
-    - name: Compactar ISO
+    - name: Compress ISO
       shell: powershell
       run: |
         $iso = Get-ChildItem work\out\Files -Recurse -Filter *.iso | Select-Object -First 1
@@ -163,7 +158,7 @@ jobs:
     # =========================
     # RELEASE
     # =========================
-    - name: Criar Release
+    - name: Create Release
       uses: ncipollo/release-action@v1
       with:
         tag: windows-11-full-${{ github.run_number }}
