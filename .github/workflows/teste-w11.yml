@@ -1,4 +1,4 @@
-name: ISO Windows AUTO Inteligente
+name: ISO Windows AUTO (ZIP Inteligente)
 
 on:
   workflow_dispatch:
@@ -8,73 +8,69 @@ on:
 jobs:
 
   check:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     outputs:
       build11: ${{ steps.w11.outputs.build }}
       build10: ${{ steps.w10.outputs.build }}
 
     steps:
-    - name: Obter build Win11
-      id: w11
+    - name: Extrair ZIP Win11
+      shell: powershell
       run: |
-        BUILD=$(curl -s https://uupdump.net/known.php?q=22631 | grep -o '22631\.[0-9]*' | sort -V | tail -n1)
-        echo "build=$BUILD" >> $GITHUB_OUTPUT
+        Expand-Archive uup11.zip -DestinationPath w11 -Force
 
-    - name: Obter build Win10
-      id: w10
+    - name: Ler build Win11
+      id: w11
+      shell: powershell
       run: |
-        BUILD=$(curl -s https://uupdump.net/known.php?q=19045 | grep -o '19045\.[0-9]*' | sort -V | tail -n1)
-        echo "build=$BUILD" >> $GITHUB_OUTPUT
+        $file = Get-Content w11\uup_download_windows.cmd
+        $build = ($file | Select-String -Pattern "22631\.\d+").Matches.Value | Select-Object -First 1
+        echo "build=$build" >> $env:GITHUB_OUTPUT
+
+    - name: Extrair ZIP Win10
+      shell: powershell
+      run: |
+        Expand-Archive uup10.zip -DestinationPath w10 -Force
+
+    - name: Ler build Win10
+      id: w10
+      shell: powershell
+      run: |
+        $file = Get-Content w10\uup_download_windows.cmd
+        $build = ($file | Select-String -Pattern "19045\.\d+").Matches.Value | Select-Object -First 1
+        echo "build=$build" >> $env:GITHUB_OUTPUT
 
   win11:
     needs: check
     runs-on: windows-latest
 
     steps:
-    - name: Verificar se já existe release Win11
-      id: checkrel
+    - name: Verificar release existente Win11
       shell: powershell
       run: |
         $tag = "win11-${{ needs.check.outputs.build11 }}"
         $releases = Invoke-RestMethod https://api.github.com/repos/${{ github.repository }}/releases
         if ($releases.tag_name -contains $tag) {
-          Write-Host "Já existe release Win11"
+          Write-Host "Já existe, pulando..."
           exit 0
         }
 
-    - name: Baixar UUP Script
-      shell: powershell
-      run: |
-        Invoke-WebRequest "https://github.com/uup-dump/uup-dump/archive/refs/heads/main.zip" -OutFile uup.zip
-        Expand-Archive uup.zip -DestinationPath . -Force
-        Rename-Item uup-dump-main uup
+    - name: Extrair ZIP Win11
+      run: Expand-Archive uup11.zip -DestinationPath uup -Force
 
     - name: Instalar aria2
-      shell: powershell
       run: |
         choco install aria2 -y
-        $aria = (Get-Command aria2c).Source
-        Copy-Item $aria "uup\files\aria2c.exe" -Force
-
-    - name: Configurar Win11
-      shell: powershell
-      run: |
-        cd uup
-        echo ${{ needs.check.outputs.build11 }} > build.txt
-        echo pt-br > lang.txt
-        echo professional > edition.txt
+        powershell -Command "$a=(Get-Command aria2c).Source; Copy-Item $a uup\files\aria2c.exe -Force"
 
     - name: Executar Win11
-      shell: cmd
-      working-directory: uup
       run: |
+        cd uup
         uup_download_windows.cmd
 
     - name: Compactar Win11
-      shell: powershell
       run: |
-        $iso = Get-ChildItem -Recurse -Filter *.iso | Select-Object -First 1
-        7z a -tzip -v1800m WIN11.zip $iso.FullName
+        powershell -Command "$iso=Get-ChildItem -Recurse -Filter *.iso | Select -First 1; 7z a -tzip -v1800m WIN11.zip $iso.FullName"
 
     - name: Release Win11
       uses: ncipollo/release-action@v1
@@ -88,49 +84,32 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Verificar se já existe release Win10
+    - name: Verificar release existente Win10
       shell: powershell
       run: |
         $tag = "win10-${{ needs.check.outputs.build10 }}"
         $releases = Invoke-RestMethod https://api.github.com/repos/${{ github.repository }}/releases
         if ($releases.tag_name -contains $tag) {
-          Write-Host "Já existe release Win10"
+          Write-Host "Já existe, pulando..."
           exit 0
         }
 
-    - name: Baixar UUP Script
-      shell: powershell
-      run: |
-        Invoke-WebRequest "https://github.com/uup-dump/uup-dump/archive/refs/heads/main.zip" -OutFile uup.zip
-        Expand-Archive uup.zip -DestinationPath . -Force
-        Rename-Item uup-dump-main uup
+    - name: Extrair ZIP Win10
+      run: Expand-Archive uup10.zip -DestinationPath uup -Force
 
     - name: Instalar aria2
-      shell: powershell
       run: |
         choco install aria2 -y
-        $aria = (Get-Command aria2c).Source
-        Copy-Item $aria "uup\files\aria2c.exe" -Force
-
-    - name: Configurar Win10
-      shell: powershell
-      run: |
-        cd uup
-        echo ${{ needs.check.outputs.build10 }} > build.txt
-        echo pt-br > lang.txt
-        echo professional > edition.txt
+        powershell -Command "$a=(Get-Command aria2c).Source; Copy-Item $a uup\files\aria2c.exe -Force"
 
     - name: Executar Win10
-      shell: cmd
-      working-directory: uup
       run: |
+        cd uup
         uup_download_windows.cmd
 
     - name: Compactar Win10
-      shell: powershell
       run: |
-        $iso = Get-ChildItem -Recurse -Filter *.iso | Select-Object -First 1
-        7z a -tzip -v1800m WIN10.zip $iso.FullName
+        powershell -Command "$iso=Get-ChildItem -Recurse -Filter *.iso | Select -First 1; 7z a -tzip -v1800m WIN10.zip $iso.FullName"
 
     - name: Release Win10
       uses: ncipollo/release-action@v1
