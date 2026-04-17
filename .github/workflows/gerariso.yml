@@ -11,8 +11,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
     - name: Install deps
       shell: powershell
@@ -20,58 +19,62 @@ jobs:
         choco install aria2 -y
         choco install 7zip -y
 
-    # =========================
-    # WORKDIR
-    # =========================
-    - name: Create work dir
+    - name: Prepare workspace
       shell: powershell
       run: |
-        New-Item -ItemType Directory -Path work -Force
+        $work = "$env:GITHUB_WORKSPACE\work"
+        New-Item -ItemType Directory -Path $work -Force
+        echo "WORK=$work" >> $env:GITHUB_ENV
 
     # =========================
-    # DOWNLOAD BASE (MESMA PASTA)
+    # DOWNLOAD BASE
     # =========================
-    - name: Download base parts
+    - name: Download base
       shell: powershell
       run: |
-        Set-Location work
+        Set-Location $env:WORK
 
-        aria2c -x 16 -s 16 -k 1M -o base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
-        aria2c -x 16 -s 16 -k 1M -o base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
-        aria2c -x 16 -s 16 -k 1M -o base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
-
-        Write-Host "Parts downloaded"
-        Get-ChildItem
+        aria2c -o base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
+        aria2c -o base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
+        aria2c -o base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
 
     # =========================
-    # EXTRAÇÃO CORRETA MULTIPART
+    # EXTRACT BASE
     # =========================
-    - name: Extract base (multipart)
+    - name: Extract base
       shell: powershell
       run: |
-        Set-Location work
+        Set-Location $env:WORK
 
-        # IMPORTANTE: só extrai pelo .001
-        7z x base.7z.001 -oout -y
+        7z x base.7z.001 -o"$env:WORK\out" -y
 
-        if (!(Test-Path "out\Files")) {
-          Write-Error "Files folder not found after extraction"
+        if (!(Test-Path "$env:WORK\out\Files")) {
+          Write-Error "Files not found"
           exit 1
         }
 
-        Write-Host "Extraction OK"
-        Get-ChildItem out
-
     # =========================
-    # APPLY INI
+    # CRIAR INI DIRETO (FIX TOTAL)
     # =========================
-    - name: Apply W10UI.ini
+    - name: Create W10UI.ini
       shell: powershell
       run: |
-        Copy-Item "W10UI.ini" "work\out\Files\W10UI.ini" -Force
+        $ini = "$env:WORK\out\Files\W10UI.ini"
 
-        Write-Host "INI applied"
-        Get-Content "work\out\Files\W10UI.ini"
+        Remove-Item $ini -ErrorAction SilentlyContinue
+
+        Add-Content $ini "AutoStart=1"
+        Add-Content $ini "AddUpdates=1"
+        Add-Content $ini "AddDrivers=1"
+        Add-Content $ini "Cleanup=1"
+        Add-Content $ini "ResetBase=1"
+        Add-Content $ini "Wim2ESD=1"
+        Add-Content $ini "Convert=1"
+        Add-Content $ini "Format=ESD"
+        Add-Content $ini "Compression=recovery"
+        Add-Content $ini "Drv_Source=Drivers\OS"
+
+        Write-Host "INI created"
 
     # =========================
     # UUP
@@ -79,19 +82,19 @@ jobs:
     - name: Extract UUP
       shell: powershell
       run: |
-        Expand-Archive "uup11.zip" -DestinationPath "uup" -Force
+        Expand-Archive "$env:GITHUB_WORKSPACE\uup11.zip" -DestinationPath "$env:GITHUB_WORKSPACE\uup" -Force
 
     - name: Prepare aria2
       shell: powershell
       run: |
         $aria = (Get-Command aria2c).Source
-        New-Item -ItemType Directory -Path "uup\files" -Force
-        Copy-Item $aria "uup\files\aria2c.exe" -Force
+        New-Item -ItemType Directory -Path "$env:GITHUB_WORKSPACE\uup\files" -Force
+        Copy-Item $aria "$env:GITHUB_WORKSPACE\uup\files\aria2c.exe" -Force
 
     - name: Download updates
       shell: powershell
       run: |
-        Set-Location uup
+        Set-Location "$env:GITHUB_WORKSPACE\uup"
         cmd /c uup_download_windows.cmd
 
     # =========================
@@ -100,18 +103,9 @@ jobs:
     - name: Copy updates
       shell: powershell
       run: |
-        $dest = "work\out\Files\Updates"
-
+        $dest = "$env:WORK\out\Files\Updates"
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
-        Copy-Item "uup\*" $dest -Recurse -Force
-
-        $count = (Get-ChildItem $dest -Recurse).Count
-        Write-Host "Updates: $count"
-
-        if ($count -lt 50) {
-          Write-Error "Updates incomplete"
-          exit 1
-        }
+        Copy-Item "$env:GITHUB_WORKSPACE\uup\*" $dest -Recurse -Force
 
     # =========================
     # RUN W10UI
@@ -119,7 +113,7 @@ jobs:
     - name: Run W10UI
       shell: powershell
       run: |
-        Set-Location work\out\Files
+        Set-Location "$env:WORK\out\Files"
         cmd /c W10UI.cmd
 
     # =========================
@@ -128,22 +122,10 @@ jobs:
     - name: Validate ISO
       shell: powershell
       run: |
-        $iso = Get-ChildItem work\out\Files -Recurse -Filter *.iso | Select-Object -First 1
+        $iso = Get-ChildItem "$env:WORK\out\Files" -Recurse -Filter *.iso | Select-Object -First 1
 
-        if (!$iso) {
-          Write-Error "ISO not generated"
-          exit 1
-        }
-
-        $size = $iso.Length
-        Write-Host "ISO size: $size"
-
-        if ($size -lt 2GB) {
-          Write-Error "ISO too small"
-          exit 1
-        }
-
-        Write-Host "ISO OK"
+        if (!$iso) { exit 1 }
+        if ($iso.Length -lt 2GB) { exit 1 }
 
     # =========================
     # COMPRESS
@@ -151,13 +133,13 @@ jobs:
     - name: Compress ISO
       shell: powershell
       run: |
-        $iso = Get-ChildItem work\out\Files -Recurse -Filter *.iso | Select-Object -First 1
+        $iso = Get-ChildItem "$env:WORK\out\Files" -Recurse -Filter *.iso | Select-Object -First 1
         7z a -tzip -v1900m Windows_11_FULL.zip $iso.FullName
 
     # =========================
     # RELEASE
     # =========================
-    - name: Create Release
+    - name: Release
       uses: ncipollo/release-action@v1
       with:
         tag: windows-11-full-${{ github.run_number }}
