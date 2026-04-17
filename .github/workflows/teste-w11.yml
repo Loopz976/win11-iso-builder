@@ -16,7 +16,7 @@ jobs:
     - name: Baixar pacote UUP (Win11 Pro PT-BR)
       shell: powershell
       run: |
-        Invoke-WebRequest -Uri "https://uupdump.net/download.php?id=latest&pack=pt-br&edition=professional&arch=amd64" -OutFile "uup.zip"
+        Invoke-WebRequest -Uri "https://uupdump.net/download.php?id=22631.2861&pack=pt-br&edition=professional&arch=amd64" -OutFile "uup.zip"
         Expand-Archive uup.zip -DestinationPath uup -Force
 
     - name: Preparar aria2
@@ -35,5 +35,5 @@ jobs:
     - name: Verificar ISO gerada
       shell: powershell
       run: |
-        Write-Host "Procurando ISO..."
+        Write-Host "ISO encontrada:"
         Get-ChildItem -Recurse -Filter *.iso
