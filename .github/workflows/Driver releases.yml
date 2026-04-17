@@ -14,12 +14,19 @@ jobs:
     - name: Instalar 7zip
       run: choco install 7zip -y
 
-    # 🔽 LIMPAR QUALQUER RESTO ANTERIOR
+    # 🔽 LIMPAR AMBIENTE (AGORA EM POWERSHELL)
     - name: Limpar ambiente
+      shell: powershell
       run: |
-        if exist Display.Driver rmdir /s /q Display.Driver
-        if exist driver rmdir /s /q driver
-        if exist nvidia_display.zip del /f /q nvidia_display.zip
+        if (Test-Path "Display.Driver") {
+          Remove-Item -Recurse -Force "Display.Driver"
+        }
+        if (Test-Path "driver") {
+          Remove-Item -Recurse -Force "driver"
+        }
+        if (Test-Path "Display.Driver.zip") {
+          Remove-Item -Force "Display.Driver.zip"
+        }
 
     # 🔽 BAIXAR DRIVER
     - name: Baixar driver NVIDIA
@@ -36,7 +43,7 @@ jobs:
     - name: Listar estrutura inicial
       run: dir driver
 
-    # 🔽 LOCALIZAR E MOVER Display.Driver (CORRIGIDO)
+    # 🔽 LOCALIZAR E MOVER Display.Driver
     - name: Preparar Display.Driver
       shell: powershell
       run: |
@@ -47,11 +54,7 @@ jobs:
           exit 1
         }
 
-        if (Test-Path "Display.Driver") {
-          Remove-Item -Recurse -Force Display.Driver
-        }
-
-        Move-Item $path.FullName Display.Driver
+        Move-Item $path.FullName -Destination "Display.Driver"
 
     # 🔍 VALIDAR ESTRUTURA FINAL
     - name: Verificar estrutura final
@@ -76,7 +79,7 @@ jobs:
         Write-Host "INF OK:" $inf.Count
         Write-Host "SYS OK:" $sys.Count
 
-    # 🔽 COMPACTAR (NOME CORRETO)
+    # 🔽 COMPACTAR
     - name: Compactar Display.Driver
       run: |
         7z a Display.Driver.zip Display.Driver
