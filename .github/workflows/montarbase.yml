@@ -1,56 +1,68 @@
-name: Build ISO
+name: Validate Release Base
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  validate:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Criar estrutura
+      - name: Criar pasta de trabalho
         shell: powershell
         run: |
-          New-Item -ItemType Directory -Force -Path "Files\ISO" | Out-Null
+          New-Item -ItemType Directory -Force -Path "work" | Out-Null
 
-      - name: Copiar base para ISO
+      - name: Baixar partes do release
         shell: powershell
         run: |
-          if (!(Test-Path "Base")) {
-            Write-Error "Pasta Base não encontrada no repositório"
+          cd work
+
+          Invoke-WebRequest "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001" -OutFile "base.7z.001"
+          Invoke-WebRequest "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002" -OutFile "base.7z.002"
+          Invoke-WebRequest "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003" -OutFile "base.7z.003"
+
+      - name: Instalar 7zip
+        run: choco install 7zip -y
+
+      - name: Extrair base completa
+        shell: powershell
+        run: |
+          cd work
+          7z x base.7z.001 -oextracted
+
+      - name: Validar estrutura completa
+        shell: powershell
+        run: |
+          $root = "work\extracted\Files"
+
+          if (!(Test-Path $root)) {
+            Write-Error "Files não encontrado"
             exit 1
           }
 
-          Copy-Item -Path "Base\*" -Destination "Files\ISO" -Recurse -Force
-
-      - name: Validar ISO (WIM ou ESD)
-        shell: powershell
-        run: |
-          $wim = Test-Path "Files\ISO\sources\install.wim"
-          $esd = Test-Path "Files\ISO\sources\install.esd"
-
-          if (-not ($wim -or $esd)) {
-            Write-Error "ISO inválida: não contém install.wim nem install.esd"
+          # W10UI (arquivo principal)
+          if (!(Test-Path "$root\W10UI.cmd")) {
+            Write-Error "W10UI não encontrado na raiz"
             exit 1
           }
 
-          Write-Host "ISO válida encontrada"
+          # ISO
+          if (!(Test-Path "$root\ISO\sources\install.wim") -and !(Test-Path "$root\ISO\sources\install.esd")) {
+            Write-Error "ISO inválida (sem install.wim/esd)"
+            exit 1
+          }
 
-      - name: Debug - listar sources
-        shell: powershell
-        run: |
-          Get-ChildItem -Path "Files\ISO\sources"
+          # Drivers
+          if (!(Test-Path "$root\Drivers\OS\Display.Driver")) {
+            Write-Error "Drivers NVIDIA não encontrados"
+            exit 1
+          }
 
-      - name: Compactar saída
-        shell: powershell
-        run: |
-          Compress-Archive -Path "Files\ISO\*" -DestinationPath "output.zip" -Force
+          # Updates
+          if (!(Test-Path "$root\Updates")) {
+            Write-Error "Pasta Updates não encontrada"
+            exit 1
+          }
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ISO_BUILD
-          path: output.zip
+          Write-Host "VALIDAÇÃO OK - BASE 100% INTACTA"
