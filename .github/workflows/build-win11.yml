@@ -1,58 +1,60 @@
-name: Build Windows 11 ISO (AUTO)
+name: Build Windows 11 ISO
 
 on:
-workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
-build:
-runs-on: windows-latest
+  build_win11:
+    runs-on: windows-latest
 
-steps:
-- name: Checkout
-  uses: actions/checkout@v4
+    steps:
 
-- name: Extrair ZIP UUP
-  shell: powershell
-  run: |
-    Expand-Archive -Path "22631.6936_amd64_pt-br_professional_59fd22e9_convert.zip" -DestinationPath "." -Force
+    - name: Checkout repo
+      uses: actions/checkout@v4
 
-    $folder = Get-ChildItem -Directory | Where-Object { $_.Name -like "*22631*" } | Select-Object -First 1
-    Rename-Item $folder.Name "uup"
+    - name: Extrair pacote UUP do Windows 11
+      shell: powershell
+      run: |
+        Expand-Archive -Path "22631.6936_amd64_pt-br_professional_59fd22e9_convert.zip" -DestinationPath "." -Force
 
-- name: Corrigir script aria2
-  shell: powershell
-  run: |
-    $script = "uup/files/get_aria2.ps1"
-    if (Test-Path $script) {
-      Set-Content -Path $script -Value "exit 0"
-    }
+        $folder = (Get-ChildItem -Directory | Where-Object { $_.Name -match "22631" }).Name
+        Rename-Item -Path $folder -NewName "uup"
 
-- name: Rodar UUP Dump
-  shell: cmd
-  working-directory: uup
-  run: |
-    uup_download_windows.cmd
+    - name: Desabilitar get_aria2.ps1
+      shell: powershell
+      run: |
+        $script = "uup/files/get_aria2.ps1"
+        if (Test-Path $script) {
+          Set-Content -Path $script -Value "Write-Host 'Ignorado'; exit 0"
+        }
 
-- name: Localizar ISO
-  id: findiso
-  shell: powershell
-  run: |
-    $iso = Get-ChildItem -Recurse -Filter *.iso | Select-Object -First 1
-    if (-not $iso) { 
-      Write-Error "ISO não encontrada"
-      exit 1 
-    }
-    echo "ISO=$($iso.FullName)" >> $env:GITHUB_OUTPUT
+    - name: Executar script UUP
+      shell: cmd
+      working-directory: uup
+      run: |
+        uup_download_windows.cmd
 
-- name: Compactar ISO (dividir)
-  shell: powershell
-  run: |
-    7z a -tzip -v1800m WIN11.zip "${{ steps.findiso.outputs.ISO }}"
+    - name: Encontrar ISO gerada
+      id: findiso
+      shell: powershell
+      run: |
+        $iso = Get-ChildItem -Recurse -Filter *.iso | Select-Object -First 1
+        if (-not $iso) {
+          Write-Error "ISO não encontrada!"
+          exit 1
+        }
+        echo "iso_path=$($iso.FullName)" >> $env:GITHUB_OUTPUT
 
-- name: Upload Release
-  uses: ncipollo/release-action@v1
-  with:
-    tag: win11-${{ github.run_number }}
-    name: Windows 11 Build Auto
-    artifacts: WIN11.zip.*
-    token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Dividir ISO (1.8GB)
+      shell: powershell
+      run: |
+        $iso = "${{ steps.findiso.outputs.iso_path }}"
+        7z a -tzip -v1800m "WIN11_ISO_PARTS.zip" "$iso"
+
+    - name: Criar release e enviar ISO
+      uses: ncipollo/release-action@v1
+      with:
+        tag: "win11-${{ github.run_id }}"
+        name: "Windows 11 ISO - Build ${{ github.run_id }}"
+        artifacts: "WIN11_ISO_PARTS.zip.*"
+        token: ${{ secrets.GITHUB_TOKEN }}
