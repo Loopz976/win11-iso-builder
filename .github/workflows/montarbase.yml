@@ -13,14 +13,32 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "work" | Out-Null
 
-      - name: Baixar partes do release
+      - name: Baixar partes do release (curl + retry)
         shell: powershell
         run: |
           cd work
 
-          Invoke-WebRequest "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001" -OutFile "base.7z.001"
-          Invoke-WebRequest "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002" -OutFile "base.7z.002"
-          Invoke-WebRequest "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003" -OutFile "base.7z.003"
+          function Download($url, $out) {
+            $max = 3
+            for ($i=1; $i -le $max; $i++) {
+              Write-Host "Download tentativa $i -> $out"
+              curl -L $url -o $out
+              if (Test-Path $out) {
+                $size = (Get-Item $out).Length
+                if ($size -gt 100MB) {
+                  Write-Host "Download OK: $out ($size bytes)"
+                  return
+                }
+              }
+              Start-Sleep -Seconds 5
+            }
+            Write-Error "Falha no download: $out"
+            exit 1
+          }
+
+          Download "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001" "base.7z.001"
+          Download "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002" "base.7z.002"
+          Download "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003" "base.7z.003"
 
       - name: Instalar 7zip
         run: choco install 7zip -y
@@ -41,25 +59,21 @@ jobs:
             exit 1
           }
 
-          # W10UI (arquivo principal)
           if (!(Test-Path "$root\W10UI.cmd")) {
             Write-Error "W10UI não encontrado na raiz"
             exit 1
           }
 
-          # ISO
           if (!(Test-Path "$root\ISO\sources\install.wim") -and !(Test-Path "$root\ISO\sources\install.esd")) {
             Write-Error "ISO inválida (sem install.wim/esd)"
             exit 1
           }
 
-          # Drivers
           if (!(Test-Path "$root\Drivers\OS\Display.Driver")) {
             Write-Error "Drivers NVIDIA não encontrados"
             exit 1
           }
 
-          # Updates
           if (!(Test-Path "$root\Updates")) {
             Write-Error "Pasta Updates não encontrada"
             exit 1
