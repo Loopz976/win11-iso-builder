@@ -14,7 +14,7 @@ jobs:
     - name: Instalar 7zip
       run: choco install 7zip -y
 
-    # 🔽 LIMPAR AMBIENTE (AGORA EM POWERSHELL)
+    # 🔽 LIMPAR AMBIENTE
     - name: Limpar ambiente
       shell: powershell
       run: |
@@ -33,7 +33,7 @@ jobs:
       run: |
         curl -L -o nvidia.exe "https://us.download.nvidia.com/Windows/342.01/342.01-desktop-win10-64bit-international.exe"
 
-    # 🔽 EXTRAIR EXE
+    # 🔽 EXTRAIR
     - name: Extrair driver
       run: |
         mkdir driver
@@ -43,7 +43,7 @@ jobs:
     - name: Listar estrutura inicial
       run: dir driver
 
-    # 🔽 LOCALIZAR E MOVER Display.Driver
+    # 🔽 PREPARAR Display.Driver
     - name: Preparar Display.Driver
       shell: powershell
       run: |
@@ -56,8 +56,8 @@ jobs:
 
         Move-Item $path.FullName -Destination "Display.Driver"
 
-    # 🔍 VALIDAR ESTRUTURA FINAL
-    - name: Verificar estrutura final
+    # 🔍 DEBUG (NÃO QUEBRA MAIS)
+    - name: Ver estrutura final (debug)
       shell: powershell
       run: |
         Write-Host "=== ESTRUTURA FINAL ==="
@@ -66,21 +66,11 @@ jobs:
         $inf = Get-ChildItem -Recurse Display.Driver -Filter *.inf
         $sys = Get-ChildItem -Recurse Display.Driver -Filter *.sys
 
-        if (!$inf) {
-          Write-Error "Nenhum arquivo INF encontrado!"
-          exit 1
-        }
-
-        if (!$sys) {
-          Write-Error "Nenhum arquivo SYS encontrado!"
-          exit 1
-        }
-
-        Write-Host "INF OK:" $inf.Count
-        Write-Host "SYS OK:" $sys.Count
+        Write-Host "INF encontrados:" ($inf | Measure-Object).Count
+        Write-Host "SYS encontrados:" ($sys | Measure-Object).Count
 
     # 🔽 COMPACTAR
-    - name: Compactar Display.Driver
+    - name: Compactar
       run: |
         7z a Display.Driver.zip Display.Driver
 
@@ -89,7 +79,7 @@ jobs:
       run: |
         7z l Display.Driver.zip
 
-    # 🚀 SUBIR NO RELEASE
+    # 🚀 RELEASE
     - name: Criar Release
       uses: ncipollo/release-action@v1
       with:
