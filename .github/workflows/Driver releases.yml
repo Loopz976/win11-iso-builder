@@ -1,10 +1,10 @@
-name: Teste Base Win10 LTSC (ISO FIX)
+name: TESTE FINAL Base Win10 LTSC
 
 on:
   workflow_dispatch:
 
 jobs:
-  build_base:
+  validar_base:
     runs-on: windows-latest
 
     steps:
@@ -14,14 +14,15 @@ jobs:
     - name: Instalar ferramentas
       run: choco install 7zip aria2 -y
 
-    # 🔽 LIMPAR
+    # LIMPAR
     - name: Limpar ambiente
       shell: powershell
       run: |
         if (Test-Path "Files") { Remove-Item -Recurse -Force "Files" }
         if (Test-Path "ISO_PARTS") { Remove-Item -Recurse -Force "ISO_PARTS" }
+        if (Test-Path "ISO_EXTRACT") { Remove-Item -Recurse -Force "ISO_EXTRACT" }
 
-    # 🔽 ESTRUTURA
+    # ESTRUTURA
     - name: Criar estrutura
       run: |
         mkdir Files
@@ -29,12 +30,24 @@ jobs:
         mkdir Files\Drivers\OS
         mkdir Files\Updates
 
-    # 🔽 W10UI
+    # W10UI
     - name: Extrair W10UI
       run: |
         7z x W10UI_10.59b.zip -oFiles -y
 
-    # 🔽 DRIVER
+    # VALIDAR W10UI
+    - name: Validar W10UI
+      shell: powershell
+      run: |
+        Write-Host "=== W10UI ==="
+        Get-ChildItem Files
+
+        if (!(Test-Path "Files\W10UI.cmd")) {
+          Write-Error "W10UI.cmd não encontrado"
+          exit 1
+        }
+
+    # DRIVER
     - name: Baixar driver
       run: |
         aria2c -x16 -s16 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip"
@@ -43,7 +56,20 @@ jobs:
       run: |
         7z x Display.Driver.zip -oFiles\Drivers\OS -y
 
-    # 🔽 ISO - BAIXAR TODAS AS PARTES
+    # VALIDAR DRIVER
+    - name: Validar driver
+      shell: powershell
+      run: |
+        Write-Host "=== DRIVER ==="
+        Get-ChildItem -Recurse Files\Drivers\OS
+
+        $inf = Get-ChildItem -Recurse Files\Drivers\OS -Filter *.inf
+        if (!$inf) {
+          Write-Error "Nenhum arquivo .inf encontrado"
+          exit 1
+        }
+
+    # ISO
     - name: Baixar ISO completa
       run: |
         mkdir ISO_PARTS
@@ -52,42 +78,47 @@ jobs:
         aria2c -x16 -s16 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002"
         aria2c -x16 -s16 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003"
 
-    # 🔍 DEBUG PARTES
     - name: Ver partes ISO
-      run: |
-        dir ISO_PARTS
+      run: dir ISO_PARTS
 
-    # 🔽 EXTRAIR 7Z (ELE JUNTA AUTOMATICO)
+    # EXTRAIR 7Z
     - name: Extrair pacote ISO
       run: |
         7z x ISO_PARTS\W10LTSC2021.7z.001 -oISO_EXTRACT -y
 
-    # 🔍 DEBUG ISO EXTRAÍDA
-    - name: Ver ISO extraída
-      run: |
-        dir ISO_EXTRACT
+    # VALIDAR ISO GERADA
+    - name: Validar ISO gerada
+      run: dir ISO_EXTRACT
 
-    # 🔽 EXTRAIR ISO PARA FILES
-    - name: Extrair conteúdo da ISO
+    # EXTRAIR ISO
+    - name: Extrair ISO
       run: |
         7z x ISO_EXTRACT\*.iso -oFiles\ISO -y
 
-    # 🔍 DEBUG FINAL ISO
-    - name: Ver estrutura ISO final
-      run: |
-        dir Files\ISO
-        dir Files\ISO\sources
-
-    # 🔍 VALIDAÇÃO FINAL
-    - name: Validar install.wim
+    # VALIDAR ISO FINAL
+    - name: Validar estrutura ISO
       shell: powershell
       run: |
+        Write-Host "=== ISO ==="
+        Get-ChildItem Files\ISO
+
         if (!(Test-Path "Files\ISO\sources\install.wim")) {
-          Write-Error "install.wim NÃO encontrado!"
+          Write-Error "install.wim não encontrado"
           exit 1
         }
 
-    # 🔍 ESTRUTURA FINAL
-    - name: Estrutura completa
+    # ESTRUTURA FINAL
+    - name: Estrutura final completa
       run: |
         dir Files
+        dir Files\Drivers\OS
+        dir Files\ISO\sources
+
+    # TESTE DE COMPACTAÇÃO
+    - name: Testar compactação 1900MB
+      run: |
+        7z a -t7z teste_base.7z Files\ -mx=9 -mmt=on -v1900m
+
+    - name: Ver arquivos gerados
+      run: |
+        dir teste_base.7z.*
