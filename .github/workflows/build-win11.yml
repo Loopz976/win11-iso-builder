@@ -17,8 +17,13 @@ jobs:
       run: |
         Expand-Archive -Path "22631.6936_amd64_pt-br_professional_59fd22e9_convert.zip" -DestinationPath "." -Force
 
-        $folder = (Get-ChildItem -Directory | Where-Object { $_.Name -match "22631" }).Name
-        Rename-Item -Path $folder -NewName "uup"
+        $folder = Get-ChildItem -Directory | Select-Object -First 1
+        if ($folder) {
+          Rename-Item -Path $folder.FullName -NewName "uup"
+        } else {
+          Write-Error "Pasta não encontrada após extração"
+          exit 1
+        }
 
     - name: Desabilitar get_aria2.ps1
       shell: powershell
