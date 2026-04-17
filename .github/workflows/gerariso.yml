@@ -94,15 +94,30 @@ jobs:
         Copy-Item $aria "uup\aria2c.exe" -Force
 
     # =========================
-    # BAIXAR UPDATES
+    # BAIXAR UPDATES (FIX PAUSE)
     # =========================
     - name: Run UUP download
       shell: cmd
       working-directory: uup
-      run: uup_download_windows.cmd
+      run: |
+        echo.|uup_download_windows.cmd
 
     # =========================
-    # COPIAR UPDATES (CORRETO FINAL)
+    # VALIDAR DOWNLOAD
+    # =========================
+    - name: Validate UUP download
+      shell: powershell
+      run: |
+        $count = (Get-ChildItem uup -Recurse -File).Count
+        Write-Host "Arquivos no UUP: $count"
+
+        if ($count -lt 50) {
+          Write-Error "Download UUP incompleto"
+          exit 1
+        }
+
+    # =========================
+    # COPIAR UPDATES (CORRETO)
     # =========================
     - name: Copy updates
       shell: powershell
@@ -118,11 +133,6 @@ jobs:
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
         $files = Get-ChildItem -Path $source -Recurse -File
-
-        if (!$files -or $files.Count -eq 0) {
-          Write-Error "Nenhum arquivo encontrado em UUPs"
-          exit 1
-        }
 
         foreach ($f in $files) {
           Copy-Item $f.FullName $dest -Force
