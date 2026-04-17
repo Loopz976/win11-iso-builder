@@ -11,31 +11,43 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Criar pasta ISO
+      - name: Criar estrutura
+        shell: powershell
         run: |
-          mkdir Files\ISO
+          New-Item -ItemType Directory -Force -Path "Files\ISO" | Out-Null
 
-      - name: Copiar arquivos da base
+      - name: Copiar base para ISO
+        shell: powershell
         run: |
-          xcopy /E /I /Y Base\* Files\ISO\
+          if (!(Test-Path "Base")) {
+            Write-Error "Pasta Base não encontrada no repositório"
+            exit 1
+          }
+
+          Copy-Item -Path "Base\*" -Destination "Files\ISO" -Recurse -Force
 
       - name: Validar ISO (WIM ou ESD)
         shell: powershell
         run: |
-          if (!(Test-Path "Files\ISO\sources\install.wim") -and !(Test-Path "Files\ISO\sources\install.esd")) {
-            Write-Error "ISO inválida (sem install.wim ou install.esd)"
+          $wim = Test-Path "Files\ISO\sources\install.wim"
+          $esd = Test-Path "Files\ISO\sources\install.esd"
+
+          if (-not ($wim -or $esd)) {
+            Write-Error "ISO inválida: não contém install.wim nem install.esd"
             exit 1
-          } else {
-            Write-Host "ISO válida encontrada"
           }
 
-      - name: Listar conteúdo (debug)
-        run: |
-          dir Files\ISO\sources
+          Write-Host "ISO válida encontrada"
 
-      - name: Compactar ISO
+      - name: Debug - listar sources
+        shell: powershell
         run: |
-          powershell Compress-Archive -Path Files\ISO\* -DestinationPath output.zip
+          Get-ChildItem -Path "Files\ISO\sources"
+
+      - name: Compactar saída
+        shell: powershell
+        run: |
+          Compress-Archive -Path "Files\ISO\*" -DestinationPath "output.zip" -Force
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
