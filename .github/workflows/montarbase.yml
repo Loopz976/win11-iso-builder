@@ -22,7 +22,7 @@ jobs:
       run: |
         New-Item -ItemType Directory -Force -Path "work" | Out-Null
 
-    - name: Baixar partes do release (aria2 ultra rápido)
+    - name: Baixar partes do release (aria2)
       shell: powershell
       run: |
         cd work
@@ -36,6 +36,23 @@ jobs:
       run: |
         cd work
         7z x base.7z.001 -oextracted
+
+    - name: Listar estrutura (debug completo)
+      shell: powershell
+      run: |
+        $root = "work\extracted\Files"
+
+        Write-Host "===== RAIZ FILES ====="
+        Get-ChildItem $root
+
+        Write-Host "===== ISO ====="
+        Get-ChildItem "$root\ISO"
+
+        Write-Host "===== SOURCES ====="
+        Get-ChildItem "$root\ISO\sources"
+
+        Write-Host "===== DRIVERS ====="
+        Get-ChildItem "$root\Drivers\OS"
 
     - name: Validar estrutura completa
       shell: powershell
