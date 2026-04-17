@@ -1,89 +1,93 @@
-name: Gerar Driver NVIDIA (Display.Driver)
+name: Teste Base Win10 LTSC (ISO FIX)
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  build_driver:
+  build_base:
     runs-on: windows-latest
 
     steps:
-    - name: Instalar 7zip
-      run: choco install 7zip -y
+    - name: Checkout
+      uses: actions/checkout@v4
 
-    # 🔽 LIMPAR AMBIENTE
+    - name: Instalar ferramentas
+      run: choco install 7zip aria2 -y
+
+    # 🔽 LIMPAR
     - name: Limpar ambiente
       shell: powershell
       run: |
-        if (Test-Path "Display.Driver") {
-          Remove-Item -Recurse -Force "Display.Driver"
-        }
-        if (Test-Path "driver") {
-          Remove-Item -Recurse -Force "driver"
-        }
-        if (Test-Path "Display.Driver.zip") {
-          Remove-Item -Force "Display.Driver.zip"
-        }
+        if (Test-Path "Files") { Remove-Item -Recurse -Force "Files" }
+        if (Test-Path "ISO_PARTS") { Remove-Item -Recurse -Force "ISO_PARTS" }
 
-    # 🔽 BAIXAR DRIVER
-    - name: Baixar driver NVIDIA
+    # 🔽 ESTRUTURA
+    - name: Criar estrutura
       run: |
-        curl -L -o nvidia.exe "https://us.download.nvidia.com/Windows/342.01/342.01-desktop-win10-64bit-international.exe"
+        mkdir Files
+        mkdir Files\ISO
+        mkdir Files\Drivers\OS
+        mkdir Files\Updates
 
-    # 🔽 EXTRAIR
+    # 🔽 W10UI
+    - name: Extrair W10UI
+      run: |
+        7z x W10UI_10.59b.zip -oFiles -y
+
+    # 🔽 DRIVER
+    - name: Baixar driver
+      run: |
+        aria2c -x16 -s16 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip"
+
     - name: Extrair driver
       run: |
-        mkdir driver
-        7z x nvidia.exe -odriver -y
+        7z x Display.Driver.zip -oFiles\Drivers\OS -y
 
-    # 🔍 DEBUG INICIAL
-    - name: Listar estrutura inicial
-      run: dir driver
+    # 🔽 ISO - BAIXAR TODAS AS PARTES
+    - name: Baixar ISO completa
+      run: |
+        mkdir ISO_PARTS
+        cd ISO_PARTS
+        aria2c -x16 -s16 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001"
+        aria2c -x16 -s16 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002"
+        aria2c -x16 -s16 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003"
 
-    # 🔽 PREPARAR Display.Driver
-    - name: Preparar Display.Driver
+    # 🔍 DEBUG PARTES
+    - name: Ver partes ISO
+      run: |
+        dir ISO_PARTS
+
+    # 🔽 EXTRAIR 7Z (ELE JUNTA AUTOMATICO)
+    - name: Extrair pacote ISO
+      run: |
+        7z x ISO_PARTS\W10LTSC2021.7z.001 -oISO_EXTRACT -y
+
+    # 🔍 DEBUG ISO EXTRAÍDA
+    - name: Ver ISO extraída
+      run: |
+        dir ISO_EXTRACT
+
+    # 🔽 EXTRAIR ISO PARA FILES
+    - name: Extrair conteúdo da ISO
+      run: |
+        7z x ISO_EXTRACT\*.iso -oFiles\ISO -y
+
+    # 🔍 DEBUG FINAL ISO
+    - name: Ver estrutura ISO final
+      run: |
+        dir Files\ISO
+        dir Files\ISO\sources
+
+    # 🔍 VALIDAÇÃO FINAL
+    - name: Validar install.wim
       shell: powershell
       run: |
-        $path = Get-ChildItem -Recurse -Directory -Filter "Display.Driver" | Select-Object -First 1
-
-        if (-not $path) {
-          Write-Error "Display.Driver NÃO encontrada!"
+        if (!(Test-Path "Files\ISO\sources\install.wim")) {
+          Write-Error "install.wim NÃO encontrado!"
           exit 1
         }
 
-        Move-Item $path.FullName -Destination "Display.Driver"
-
-    # 🔍 DEBUG (NÃO QUEBRA MAIS)
-    - name: Ver estrutura final (debug)
-      shell: powershell
+    # 🔍 ESTRUTURA FINAL
+    - name: Estrutura completa
       run: |
-        Write-Host "=== ESTRUTURA FINAL ==="
-        Get-ChildItem -Recurse Display.Driver
-
-        $inf = Get-ChildItem -Recurse Display.Driver -Filter *.inf
-        $sys = Get-ChildItem -Recurse Display.Driver -Filter *.sys
-
-        Write-Host "INF encontrados:" ($inf | Measure-Object).Count
-        Write-Host "SYS encontrados:" ($sys | Measure-Object).Count
-
-    # 🔽 COMPACTAR
-    - name: Compactar
-      run: |
-        7z a Display.Driver.zip Display.Driver
-
-    # 🔍 VALIDAR ZIP
-    - name: Verificar ZIP
-      run: |
-        7z l Display.Driver.zip
-
-    # 🚀 RELEASE
-    - name: Criar Release
-      uses: ncipollo/release-action@v1
-      with:
-        tag: nvidia-driver-${{ github.run_number }}
-        name: NVIDIA Display.Driver
-        artifacts: Display.Driver.zip
-        token: ${{ secrets.GITHUB_TOKEN }}
+        dir Files
