@@ -1,101 +1,44 @@
-name: Gerar Base Win10 LTSC 21H2
+name: Build ISO
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  build_base:
+  build:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Instalar ferramentas
-      run: choco install 7zip aria2 -y
+      - name: Criar pasta ISO
+        run: |
+          mkdir Files\ISO
 
-    # LIMPAR
-    - name: Limpar ambiente
-      shell: powershell
-      run: |
-        if (Test-Path "Files") { Remove-Item -Recurse -Force "Files" }
-        if (Test-Path "ISO_PARTS") { Remove-Item -Recurse -Force "ISO_PARTS" }
-        if (Test-Path "ISO_EXTRACT") { Remove-Item -Recurse -Force "ISO_EXTRACT" }
+      - name: Copiar arquivos da base
+        run: |
+          xcopy /E /I /Y Base\* Files\ISO\
 
-    # ESTRUTURA
-    - name: Criar estrutura
-      run: |
-        mkdir Files
-        mkdir Files\ISO
-        mkdir Files\Drivers\OS
-        mkdir Files\Updates
+      - name: Validar ISO (WIM ou ESD)
+        shell: powershell
+        run: |
+          if (!(Test-Path "Files\ISO\sources\install.wim") -and !(Test-Path "Files\ISO\sources\install.esd")) {
+            Write-Error "ISO inválida (sem install.wim ou install.esd)"
+            exit 1
+          } else {
+            Write-Host "ISO válida encontrada"
+          }
 
-    # W10UI
-    - name: Extrair W10UI
-      run: |
-        7z x W10UI_10.59b.zip -oFiles -y
+      - name: Listar conteúdo (debug)
+        run: |
+          dir Files\ISO\sources
 
-    # DRIVER
-    - name: Baixar driver NVIDIA
-      run: |
-        aria2c -x16 -s16 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip"
+      - name: Compactar ISO
+        run: |
+          powershell Compress-Archive -Path Files\ISO\* -DestinationPath output.zip
 
-    - name: Extrair driver
-      run: |
-        7z x Display.Driver.zip -oFiles\Drivers\OS -y
-
-    # ISO (PARTES)
-    - name: Baixar ISO completa
-      run: |
-        mkdir ISO_PARTS
-        cd ISO_PARTS
-        aria2c -x16 -s16 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001"
-        aria2c -x16 -s16 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002"
-        aria2c -x16 -s16 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003"
-
-    # EXTRAIR PACOTE
-    - name: Extrair pacote ISO
-      run: |
-        7z x ISO_PARTS\W10LTSC2021.7z.001 -oISO_EXTRACT -y
-
-    # EXTRAIR ISO
-    - name: Extrair ISO
-      run: |
-        7z x ISO_EXTRACT\*.iso -oFiles\ISO -y
-
-    # VALIDAÇÃO FINAL (leve)
-    - name: Validar estrutura
-      shell: powershell
-      run: |
-        if (!(Test-Path "Files\ISO\sources\install.wim")) {
-          Write-Error "ISO inválida"
-          exit 1
-        }
-
-    # COMPACTAR (1900MB)
-    - name: Compactar base
-      run: |
-        7z a -t7z Win10LTSC21H2Base.7z Files\ -mx=9 -mmt=on -v1900m
-
-    # RELEASE
-    - name: Criar Release
-      uses: ncipollo/release-action@v1
-      with:
-        tag: w10-ltsc21h2-base-${{ github.run_number }}
-        name: Win10 LTSC 21H2 Base W10UI Full
-        body: |
-          Base completa Windows 10 LTSC 21H2 preparada com W10UI.
-
-          Inclui:
-          - W10UI completo na raiz
-          - ISO original extraída
-          - Driver NVIDIA (Display.Driver)
-          - Estrutura Files pronta
-          - Pasta Updates preparada
-
-          Pronta para automação completa.
-
-        artifacts: Win10LTSC21H2Base.7z.*
-        token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ISO_BUILD
+          path: output.zip
