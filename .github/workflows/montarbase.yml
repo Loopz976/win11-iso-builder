@@ -1,0 +1,108 @@
+name: Teste Base Win10 LTSC (Debug)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_base:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Instalar ferramentas
+      run: choco install 7zip aria2 -y
+
+    # 🔽 LIMPAR
+    - name: Limpar ambiente
+      shell: powershell
+      run: |
+        if (Test-Path "Files") { Remove-Item -Recurse -Force "Files" }
+        if (Test-Path "ISO_PARTS") { Remove-Item -Recurse -Force "ISO_PARTS" }
+
+    # 🔽 ESTRUTURA
+    - name: Criar estrutura
+      run: |
+        mkdir Files
+        mkdir Files\ISO
+        mkdir Files\Drivers\OS
+        mkdir Files\Updates
+
+    # 🔽 W10UI
+    - name: Extrair W10UI
+      run: |
+        7z x W10UI_10.59b.zip -oFiles -y
+
+    # 🔍 DEBUG W10UI
+    - name: Verificar W10UI
+      shell: powershell
+      run: |
+        Write-Host "=== W10UI ROOT ==="
+        Get-ChildItem Files
+
+        if (!(Test-Path "Files\W10UI.cmd")) {
+          Write-Error "W10UI.cmd NÃO encontrado!"
+          exit 1
+        }
+
+    # 🔽 DRIVER
+    - name: Baixar driver
+      run: |
+        aria2c -x16 -s16 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip"
+
+    - name: Extrair driver
+      run: |
+        7z x Display.Driver.zip -oFiles\Drivers\OS -y
+
+    # 🔍 DEBUG DRIVER
+    - name: Verificar driver
+      shell: powershell
+      run: |
+        Write-Host "=== DRIVER ==="
+        Get-ChildItem -Recurse Files\Drivers\OS
+
+        $inf = Get-ChildItem -Recurse Files\Drivers\OS -Filter *.inf
+        if (!$inf) {
+          Write-Error "Driver sem INF!"
+          exit 1
+        }
+
+    # 🔽 ISO
+    - name: Baixar ISO
+      run: |
+        mkdir ISO_PARTS
+        cd ISO_PARTS
+        aria2c -x16 -s16 "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001"
+
+    - name: Extrair ISO
+      run: |
+        7z x ISO_PARTS\*.001 -oFiles\ISO -y
+
+    # 🔍 DEBUG ISO
+    - name: Verificar ISO
+      shell: powershell
+      run: |
+        Write-Host "=== ISO ==="
+        Get-ChildItem Files\ISO
+
+        if (!(Test-Path "Files\ISO\sources\install.wim")) {
+          Write-Error "install.wim NÃO encontrado!"
+          exit 1
+        }
+
+    # 🔍 DEBUG FINAL
+    - name: Estrutura final completa
+      shell: powershell
+      run: |
+        Write-Host "=== ESTRUTURA FINAL ==="
+        Get-ChildItem -Recurse Files
+
+    # 🔽 TESTE COMPACTAÇÃO (SEM SUBIR AINDA)
+    - name: Teste compactação
+      run: |
+        7z a -t7z test_base.7z Files\ -v1900m
+
+    - name: Verificar arquivos compactados
+      run: |
+        dir test_base.7z.*
