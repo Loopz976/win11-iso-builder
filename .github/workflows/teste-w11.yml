@@ -1,4 +1,4 @@
-name: Testar pacote updates Win11
+name: Teste UUP Win11 (ZIP correto)
 
 on:
   workflow_dispatch:
@@ -11,67 +11,61 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Instalar 7zip
-      run: choco install 7zip -y
+    - name: Instalar aria2
+      shell: powershell
+      run: |
+        choco install aria2 -y
 
-    # 🔽 CRIAR ESTRUTURA IGUAL UUP
-    - name: Preparar pasta UUP
+    - name: Preparar pasta
       shell: powershell
       run: |
         New-Item -ItemType Directory -Path uup -Force
 
-    # 🔽 EXTRAIR ZIP (CORRETO)
-    - name: Extrair pacote updates
+    - name: Extrair ZIP UUP
       shell: powershell
       run: |
-        if (!(Test-Path "22631.6936_amd64_updates_59fd22e9.zip")) {
-          Write-Error "ZIP NÃO ENCONTRADO!"
-          Get-ChildItem
-          exit 1
-        }
+        Expand-Archive -Path "uup11.zip" -DestinationPath "uup" -Force
 
-        7z x "22631.6936_amd64_updates_59fd22e9.zip" -ouup -y
-
-    # 🔍 DEBUG IGUAL UUP
-    - name: Listar estrutura UUP
-      shell: powershell
-      run: |
-        Write-Host "=== ESTRUTURA UUP ==="
+        Write-Host "=== ARQUIVOS EXTRAÍDOS ==="
         Get-ChildItem -Recurse uup
 
-    # 🔽 VALIDAR PACOTE
-    - name: Validar conteúdo
+    - name: Validar script UUP
       shell: powershell
       run: |
-        $cab = Get-ChildItem -Recurse uup -Filter *.cab
-
-        if (!$cab) {
-          Write-Error "Nenhum CAB encontrado - pacote inválido!"
+        if (!(Test-Path "uup\uup_download_windows.cmd")) {
+          Write-Error "Script UUP NÃO encontrado!"
           exit 1
         }
 
-        Write-Host "CAB OK:" $cab.Count
-
-    # 🔽 SIMULAR PASTA UPDATES (W10UI)
-    - name: Preparar Updates
+    - name: Preparar aria2 no padrão UUP
       shell: powershell
       run: |
-        New-Item -ItemType Directory -Path uup\Updates -Force
+        $aria = (Get-Command aria2c).Source
 
-        Get-ChildItem -Recurse uup -Include *.cab, *.msu |
-        Copy-Item -Destination uup\Updates -Force
+        New-Item -ItemType Directory -Path "uup\files" -Force
+        Copy-Item $aria "uup\files\aria2c.exe" -Force
 
-    # 🔍 VALIDAR FINAL
-    - name: Verificar Updates
-      shell: powershell
-      run: |
-        Write-Host "=== UPDATES PRONTOS ==="
-        Get-ChildItem uup\Updates
-
-        if (!(Get-ChildItem uup\Updates)) {
-          Write-Error "Falha ao preparar updates!"
+        if (!(Test-Path "uup\files\aria2c.exe")) {
+          Write-Error "aria2 não copiado!"
           exit 1
         }
 
-    - name: Final
-      run: echo "PACOTE FUNCIONANDO 100%"
+    - name: Executar UUP (DOWNLOAD REAL)
+      shell: cmd
+      working-directory: uup
+      run: |
+        uup_download_windows.cmd
+
+    - name: Verificar resultado
+      shell: powershell
+      run: |
+        Write-Host "=== RESULTADO ==="
+        Get-ChildItem -Recurse uup
+
+        $esd = Get-ChildItem -Recurse uup -Filter *.esd
+        if ($esd) {
+          Write-Host "DOWNLOAD UUP OK"
+        } else {
+          Write-Error "Falha no download UUP"
+          exit 1
+        }
