@@ -94,7 +94,7 @@ jobs:
         Copy-Item $aria "uup\aria2c.exe" -Force
 
     # =========================
-    # BAIXAR UPDATES (FIX PAUSE)
+    # BAIXAR UPDATES (SEM PAUSA)
     # =========================
     - name: Run UUP download
       shell: cmd
@@ -112,27 +112,33 @@ jobs:
         Write-Host "Arquivos no UUP: $count"
 
         if ($count -lt 50) {
-          Write-Error "Download UUP incompleto"
+          Write-Error "Download incompleto"
           exit 1
         }
 
     # =========================
-    # COPIAR UPDATES (CORRETO)
+    # COPIAR UPDATES (CAMINHO REAL)
     # =========================
     - name: Copy updates
       shell: powershell
       run: |
-        $source = "uup\UUPs"
+        $source = "uup\Files\UUP"
         $dest = "work\out\Files\Updates"
 
         if (!(Test-Path $source)) {
-          Write-Error "Pasta UUPs nao encontrada"
+          Write-Error "Pasta Files\\UUP nao encontrada"
+          Get-ChildItem uup -Recurse
           exit 1
         }
 
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
         $files = Get-ChildItem -Path $source -Recurse -File
+
+        if ($files.Count -eq 0) {
+          Write-Error "Nenhum arquivo encontrado em UUP"
+          exit 1
+        }
 
         foreach ($f in $files) {
           Copy-Item $f.FullName $dest -Force
