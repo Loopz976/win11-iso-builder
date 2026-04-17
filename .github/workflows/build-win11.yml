@@ -22,16 +22,33 @@ jobs:
         New-Item -ItemType Directory -Path uup -Force
         Expand-Archive -Path "22631.6936_amd64_pt-br_professional_59fd22e9_convert.zip" -DestinationPath "uup" -Force
 
-    - name: Copiar aria2 para pasta correta
+    - name: Preparar aria2 corretamente
       shell: powershell
       run: |
         $aria = (Get-Command aria2c).Source
-        if (!(Test-Path "uup\files")) {
-          New-Item -ItemType Directory -Path "uup\files" -Force
-        }
-        Copy-Item $aria "uup\files\aria2c.exe" -Force
 
-    - name: Executar script UUP
+        $filesPath = "uup\files"
+        if (!(Test-Path $filesPath)) {
+          New-Item -ItemType Directory -Path $filesPath -Force
+        }
+
+        Copy-Item $aria "$filesPath\aria2c.exe" -Force
+
+        if (!(Test-Path "$filesPath\aria2c.exe")) {
+          Write-Error "aria2 não foi copiado corretamente!"
+          exit 1
+        }
+
+    - name: Validar estrutura UUP
+      shell: powershell
+      run: |
+        if (!(Test-Path "uup\uup_download_windows.cmd")) {
+          Write-Error "Script principal não encontrado!"
+          Get-ChildItem -Recurse
+          exit 1
+        }
+
+    - name: Executar UUP Dump
       shell: cmd
       working-directory: uup
       run: |
@@ -48,15 +65,15 @@ jobs:
         }
         echo "iso_path=$($iso.FullName)" >> $env:GITHUB_OUTPUT
 
-    - name: Dividir ISO (1.8GB)
+    - name: Compactar ISO (1.8GB)
       shell: powershell
       run: |
-        7z a -tzip -v1800m "WIN11_ISO_PARTS.zip" "${{ steps.findiso.outputs.iso_path }}"
+        7z a -tzip -v1800m WIN11_ISO.zip "${{ steps.findiso.outputs.iso_path }}"
 
-    - name: Criar release e enviar ISO
+    - name: Criar release
       uses: ncipollo/release-action@v1
       with:
         tag: win11-${{ github.run_id }}
         name: Windows 11 ISO Build ${{ github.run_id }}
-        artifacts: WIN11_ISO_PARTS.zip.*
+        artifacts: WIN11_ISO.zip.*
         token: ${{ secrets.GITHUB_TOKEN }}
