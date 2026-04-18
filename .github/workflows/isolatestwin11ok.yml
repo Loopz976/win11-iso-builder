@@ -19,7 +19,7 @@ jobs:
         run: |
           tar -xf script.zip
 
-      # 🔧 Corrigir script automaticamente (SEM precisar editar manual)
+      # 🔧 Corrigir script automaticamente (sem precisar editar manual)
       - name: Fix script (CI compatibility)
         shell: powershell
         run: |
@@ -69,13 +69,15 @@ jobs:
             )
           )
 
-      # 🔥 Deletar release antigo (overwrite)
+      # 🔥 Deletar release antigo (SEM erro agora)
       - name: Delete old release
         continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete win11-iso --yes
 
-      # 🚀 Upload para release
+      # 🚀 Criar/Atualizar release e subir arquivos
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
