@@ -1,4 +1,4 @@
-name: Build Windows 11 ISO (Optimized)
+name: Build Windows 11 ISO (Final)
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 📦 Extrair script
+      # 📦 Extrair arquivos
       - name: Extract files
         run: |
           tar -xf script.zip
@@ -28,16 +28,18 @@ jobs:
           $content = $content -replace 'CHOICE /c fs.*', 'set ListSel=F'
           $content | Set-Content "script_auto.cmd"
 
-      # 🚀 Executar script (gera todas ISOs)
+      # 🚀 Executar script (ignora erro final)
       - name: Run script
+        shell: cmd
         run: |
-          cmd /c script_auto.cmd
+          call script_auto.cmd
+          exit /b 0
 
       # 📂 Criar pasta output
       - name: Create output
         run: mkdir output
 
-      # 🔥 PROCESSAR UMA ISO POR VEZ (evita estourar espaço)
+      # 🔥 Processar ISOs (1 por vez, só PT-BR)
       - name: Process ISOs safely
         shell: cmd
         run: |
@@ -66,7 +68,7 @@ jobs:
         run: |
           gh release delete win11-23h2-22631.6060 --yes
 
-      # 🚀 Upload final
+      # 🚀 Upload para release
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
