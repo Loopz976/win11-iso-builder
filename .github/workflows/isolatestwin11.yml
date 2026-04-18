@@ -1,0 +1,65 @@
+name: Build Windows 11 ISO (Auto)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 📦 Extrair script
+      - name: Extract files
+        run: |
+          tar -xf script.zip
+
+      # 🔧 Remover interação (FORÇA F)
+      - name: Patch script (auto mode)
+        run: |
+          powershell -Command ^
+          "(Get-Content script.cmd) `
+          -replace 'CHOICE /c fs.*', 'set ListSel=F' `
+          | Set-Content script_auto.cmd"
+
+      # 🚀 Executar script
+      - name: Run script (auto)
+        run: |
+          cmd /c script_auto.cmd
+
+      # 🔍 Filtrar só as 2 ISOs desejadas
+      - name: Keep only target ISOs
+        run: |
+          mkdir output
+          for %%f in (*.iso) do (
+            echo %%f | findstr /i "consumer business" >nul && move "%%f" output\
+          )
+
+      # 📦 Compactar em partes de 1900MB
+      - name: Split ISOs (1900MB parts)
+        run: |
+          cd output
+          for %%f in (*.iso) do (
+            echo Compactando %%f
+            7z a -v1900m "%%~nf.7z" "%%f"
+          )
+
+      # 🗑️ Remover ISO original (opcional pra economizar espaço)
+      - name: Cleanup ISO
+        run: |
+          del /q output\*.iso
+
+      # 🚀 Upload Release (overwrite ativado)
+      - name: Upload Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: win11-23h2-22631.6060
+          name: Windows 11 23H2 22631.6060 PT-BR
+          files: output/*
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
