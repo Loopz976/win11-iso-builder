@@ -1,0 +1,79 @@
+name: W11 Business 6060
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 📦 Extrair script
+      - name: Extract script
+        run: |
+          tar -xf w11-business-6060.zip
+
+      # 🔧 Corrigir script automaticamente
+      - name: Fix script
+        shell: powershell
+        run: |
+          $file = Get-ChildItem -Filter *.cmd | Select-Object -First 1
+          $content = Get-Content $file.FullName -Raw
+
+          # remove interação
+          $content = $content -replace 'CHOICE /c fs.*', 'set ListSel=F'
+
+          # corrige erro final
+          $content = $content -replace 'rd>nul /s /q "%dir_temp%"', 'rd /s /q "%dir_temp%" 2>nul'
+          $content = $content -replace 'timeout>nul /t 10', 'timeout /t 1 >nul'
+          $content = $content -replace 'exit\r?\n$', 'exit /b 0'
+
+          Set-Content "script_fixed.cmd" $content
+
+      # 🚀 Executar script
+      - name: Run script
+        shell: cmd
+        run: |
+          call script_fixed.cmd
+
+      # 📂 Criar pasta output
+      - name: Create output
+        run: mkdir output
+
+      # 🔥 Processar apenas Business PT-BR
+      - name: Process Business ISO
+        shell: cmd
+        run: |
+          for %%f in (*.iso) do (
+            echo %%f | findstr /i "business pt-br" >nul
+            if not errorlevel 1 (
+              echo Processando %%f
+
+              move "%%f" output\
+
+              cd output
+
+              echo Compactando %%f
+              7z a -v1900m -mx=0 "w11-business-6060.7z" "%%f"
+
+              del "%%f"
+
+              cd ..
+            )
+          )
+
+      # 🚀 Upload para release
+      - name: Upload Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: w11-business-6060
+          name: W11 Business 6060
+          files: output/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
