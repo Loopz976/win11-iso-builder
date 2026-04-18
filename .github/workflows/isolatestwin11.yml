@@ -1,4 +1,4 @@
-name: Build Windows 11 ISO (Final)
+name: Build Windows 11 ISO (Final Clean)
 
 on:
   workflow_dispatch:
@@ -19,8 +19,8 @@ jobs:
         run: |
           tar -xf script.zip
 
-      # 🔧 Patch script (remove interação)
-      - name: Patch script
+      # 🔧 Patch script (remover interação do CHOICE)
+      - name: Patch script (auto mode)
         shell: powershell
         run: |
           $file = Get-ChildItem -Filter *.cmd | Select-Object -First 1
@@ -28,15 +28,14 @@ jobs:
           $content = $content -replace 'CHOICE /c fs.*', 'set ListSel=F'
           $content | Set-Content "script_auto.cmd"
 
-      # 🚀 Executar script (ignora erro final)
+      # 🚀 Executar script (agora sem erro final)
       - name: Run script
         shell: cmd
         run: |
           call script_auto.cmd
-          exit /b 0
 
       # 📂 Criar pasta output
-      - name: Create output
+      - name: Create output folder
         run: mkdir output
 
       # 🔥 Processar ISOs (1 por vez, só PT-BR)
