@@ -1,4 +1,4 @@
-name: W11 Consumer 6060
+name: Teste - W11 Consumer 6060
 
 on:
   workflow_dispatch:
