@@ -1,4 +1,4 @@
-name: W11 Business 6060
+name: W11 Consumer 6060
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Extract script
-        run: tar -xf w11-business-6060.zip
+        run: tar -xf w11-consumer-6060.zip
 
       - name: Fix script (safe)
         shell: powershell
@@ -30,25 +30,23 @@ jobs:
 
           Set-Content "script_fixed.cmd" $content
 
-      # 🔥 CORREÇÃO AQUI TAMBÉM
       - name: Run script
         shell: cmd
         continue-on-error: true
-        run: |
-          call script_fixed.cmd
+        run: call script_fixed.cmd
 
       - name: Create output
         run: mkdir output
 
-      - name: Process Business ISO
+      - name: Process Consumer ISO
         shell: cmd
         run: |
           for %%f in (*.iso) do (
-            echo %%f | findstr /i "business pt-br" >nul
+            echo %%f | findstr /i "consumer pt-br" >nul
             if not errorlevel 1 (
               move "%%f" output\
               cd output
-              7z a -v1900m -mx=0 "w11-business-6060.7z" "%%f"
+              7z a -v1900m -mx=0 "w11-consumer-6060.7z" "%%f"
               del "%%f"
               cd ..
             )
@@ -57,8 +55,8 @@ jobs:
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: w11-business-6060
-          name: W11 Business 6060
+          tag_name: w11-consumer-6060
+          name: W11 Consumer 6060
           files: output/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
