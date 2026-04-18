@@ -1,0 +1,62 @@
+name: W11 Business 6060
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract script
+        run: tar -xf w11-business-6060.zip
+
+      - name: Fix script (safe)
+        shell: powershell
+        run: |
+          $file = Get-ChildItem -Filter *.cmd | Select-Object -First 1
+          $content = Get-Content $file.FullName -Raw
+
+          $content = $content -replace 'CHOICE /c fs.*', 'set ListSel=F'
+          $content = $content -replace 'rd>nul /s /q "%dir_temp%"', 'rd /s /q "%dir_temp%" 2>nul'
+          $content = $content -replace 'timeout>nul /t 10', 'timeout /t 1 >nul'
+
+          $content = $content + "`r`nexit /b 0`r`n"
+
+          Set-Content "script_fixed.cmd" $content
+
+      - name: Run script
+        shell: cmd
+        continue-on-error: true
+        run: call script_fixed.cmd
+
+      - name: Create output
+        run: mkdir output
+
+      - name: Process Business ISO
+        shell: cmd
+        run: |
+          for %%f in (*.iso) do (
+            echo %%f | findstr /i "business pt-br" >nul
+            if not errorlevel 1 (
+              move "%%f" output\
+              cd output
+              7z a -v1900m -mx=0 "w11-business-6060.7z" "%%f"
+              del "%%f"
+              cd ..
+            )
+          )
+
+      - name: Upload Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: w11-business-6060
+          name: W11 Business 6060
+          files: output/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
