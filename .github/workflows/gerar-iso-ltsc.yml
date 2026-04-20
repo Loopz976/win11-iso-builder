@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (FINAL DEFINITIVO)
+name: Gerar ISO Windows 10 LTSC (FINAL ABSOLUTO)
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
 
       # =========================
-      # AMBIENTE LIMPO
+      # LIMPAR AMBIENTE
       # =========================
       - name: Preparar ambiente
         run: |
@@ -26,7 +26,7 @@ jobs:
           mkdir D:\Files\Drivers\OS
 
       # =========================
-      # BAIXAR ISO (MULTIPART)
+      # BAIXAR ISO BASE
       # =========================
       - name: Baixar ISO
         run: |
@@ -44,16 +44,14 @@ jobs:
 
       - name: Mover ISO
         run: |
-          for /r D:\Files\ISO %%i in (*.iso) do (
-              move "%%i" D:\Files\
-          )
+          for /r D:\Files\ISO %%i in (*.iso) do move "%%i" D:\Files\
 
       - name: Validar ISO
         run: |
           dir D:\Files\*.iso || exit /b 1
 
       # =========================
-      # MONTAR ISO (IGUAL PC)
+      # MONTAR ISO
       # =========================
       - name: Montar ISO
         shell: powershell
@@ -63,7 +61,7 @@ jobs:
           $drive = (Get-DiskImage $iso.FullName | Get-Volume).DriveLetter
           echo "DRIVE=$drive" >> $env:GITHUB_ENV
 
-      - name: Debug drive
+      - name: Debug Drive
         run: |
           echo DRIVE=%DRIVE%
           dir %DRIVE%:\
@@ -114,20 +112,23 @@ jobs:
           ) > D:\Files\W10UI.ini
 
       # =========================
-      # EXECUTAR W10UI (INPUT CORRETO)
+      # EXECUTAR W10UI (FIX FINAL)
       # =========================
       - name: Rodar W10UI
+        shell: powershell
         run: |
-          cd /d D:\Files
+          cd D:\Files
 
-          echo 1>input.txt
-          echo %DRIVE%:\>>input.txt
-          echo 0>>input.txt
-          echo 9>>input.txt
+          $drive = "$env:DRIVE`:\"  
 
-          type input.txt
+          $input = @"
+1
+$drive
+0
+9
+"@
 
-          W10UI.cmd < input.txt
+          $input | cmd /c W10UI.cmd
 
       # =========================
       # DESMONTAR ISO
@@ -147,9 +148,9 @@ jobs:
           for %%i in (D:\Files\*19044*.iso) do set FINALISO=%%i
 
           if "%FINALISO%"=="" (
-              echo ERRO: ISO final nao encontrada
-              dir D:\Files\
-              exit /b 1
+            echo ERRO: ISO final nao encontrada
+            dir D:\Files\
+            exit /b 1
           )
 
           echo FINALISO=%FINALISO% >> %GITHUB_ENV%
