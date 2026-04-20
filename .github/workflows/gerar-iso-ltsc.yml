@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (FINAL OK)
+name: Gerar ISO Windows 10 LTSC (FINAL DEFINITIVO)
 
 on:
   workflow_dispatch:
@@ -12,11 +12,10 @@ jobs:
         shell: cmd
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       # =========================
-      # LIMPAR AMBIENTE
+      # AMBIENTE
       # =========================
       - name: Preparar ambiente
         run: |
@@ -26,7 +25,7 @@ jobs:
           mkdir D:\Files\Drivers\OS
 
       # =========================
-      # BAIXAR ISO
+      # ISO BASE
       # =========================
       - name: Baixar ISO
         run: |
@@ -41,17 +40,10 @@ jobs:
       - name: Extrair ISO
         run: |
           7z x D:\Files\base.7z.001 -oD:\Files\ISO -y
-
-      - name: Mover ISO
-        run: |
           for /r D:\Files\ISO %%i in (*.iso) do move "%%i" D:\Files\
 
-      - name: Validar ISO
-        run: |
-          dir D:\Files\*.iso || exit /b 1
-
       # =========================
-      # MONTAR ISO (IGUAL PC)
+      # MONTAR ISO
       # =========================
       - name: Montar ISO
         shell: powershell
@@ -64,18 +56,15 @@ jobs:
       - name: Debug Drive
         run: |
           echo DRIVE=%DRIVE%
-          dir %DRIVE%:\
+          dir %DRIVE%:\sources
 
       # =========================
-      # UPDATE
+      # UPDATE + DRIVER
       # =========================
       - name: Baixar Update
         run: |
           curl -L -o D:\Files\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
-      # =========================
-      # DRIVER
-      # =========================
       - name: Baixar Driver
         run: |
           curl -L -o D:\Files\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
@@ -91,12 +80,16 @@ jobs:
         run: |
           7z x W10UI_10.59b.zip -oD:\Files -y
 
+      # =========================
+      # CONFIG (SEM INPUT)
+      # =========================
       - name: Criar W10UI.ini
         run: |
           (
           echo [W10UI]
           echo AutoStart=1
           echo Silent=1
+          echo Target=%DRIVE%:\
           echo Repo=D:\Files\Updates
           echo AddUpdates=1
           echo Cleanup=1
@@ -109,23 +102,12 @@ jobs:
           ) > D:\Files\W10UI.ini
 
       # =========================
-      # RODAR W10UI (FIX REAL)
+      # EXECUÇÃO (SEM INPUT)
       # =========================
       - name: Rodar W10UI
-        shell: powershell
         run: |
-          cd D:\Files
-
-          $drive = "$env:DRIVE`:\"
-
-          "1" | Out-File input.txt -Encoding ascii
-          $drive | Out-File input.txt -Append -Encoding ascii
-          "0" | Out-File input.txt -Append -Encoding ascii
-          "9" | Out-File input.txt -Append -Encoding ascii
-
-          Get-Content input.txt
-
-          cmd /c "W10UI.cmd < input.txt"
+          cd /d D:\Files
+          W10UI.cmd
 
       # =========================
       # DESMONTAR ISO
@@ -137,31 +119,19 @@ jobs:
           Dismount-DiskImage -ImagePath $iso.FullName
 
       # =========================
-      # DETECTAR ISO FINAL
+      # ISO FINAL
       # =========================
       - name: Detectar ISO final
         run: |
           set FINALISO=
           for %%i in (D:\Files\*19044*.iso) do set FINALISO=%%i
-
-          if "%FINALISO%"=="" (
-            echo ERRO: ISO final nao encontrada
-            dir D:\Files\
-            exit /b 1
-          )
-
+          if "%FINALISO%"=="" exit /b 1
           echo FINALISO=%FINALISO% >> %GITHUB_ENV%
 
-      # =========================
-      # COMPACTAR
-      # =========================
       - name: Compactar ISO
         run: |
           7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z "%FINALISO%"
 
-      # =========================
-      # UPLOAD
-      # =========================
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
