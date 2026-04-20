@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (FINAL DEFINITIVO)
+name: Gerar ISO Windows 10 LTSC (WIM DIRECT - FINAL)
 
 on:
   workflow_dispatch:
@@ -23,9 +23,10 @@ jobs:
           mkdir D:\Files
           mkdir D:\Files\Updates
           mkdir D:\Files\Drivers\OS
+          mkdir D:\Files\WIM
 
       # =========================
-      # ISO BASE
+      # BAIXAR ISO (MULTIPART)
       # =========================
       - name: Baixar ISO
         run: |
@@ -37,34 +38,44 @@ jobs:
         run: |
           7z t D:\Files\base.7z.001
 
-      - name: Extrair ISO
+      - name: Extrair pacote
         run: |
           7z x D:\Files\base.7z.001 -oD:\Files\ISO -y
+
+      - name: Mover ISO para raiz
+        run: |
           for /r D:\Files\ISO %%i in (*.iso) do move "%%i" D:\Files\
 
-      # =========================
-      # MONTAR ISO
-      # =========================
-      - name: Montar ISO
-        shell: powershell
+      - name: Validar ISO
         run: |
-          $iso = Get-ChildItem D:\Files\*.iso | Select-Object -First 1
-          Mount-DiskImage -ImagePath $iso.FullName
-          $drive = (Get-DiskImage $iso.FullName | Get-Volume).DriveLetter
-          "DRIVE=$drive" >> $env:GITHUB_ENV
-
-      - name: Debug Drive
-        run: |
-          echo DRIVE=%DRIVE%
-          dir %DRIVE%:\sources
+          dir D:\Files\*.iso || exit /b 1
 
       # =========================
-      # UPDATE + DRIVER
+      # EXTRAIR install.wim DIRETO DA ISO
+      # =========================
+      - name: Extrair install.wim
+        run: |
+          for %%i in (D:\Files\*.iso) do (
+            7z e "%%i" sources\install.wim -oD:\Files\WIM -y
+          )
+
+      - name: Validar WIM
+        run: |
+          if not exist D:\Files\WIM\install.wim (
+            echo ERRO: install.wim nao encontrado
+            exit /b 1
+          )
+
+      # =========================
+      # UPDATE
       # =========================
       - name: Baixar Update
         run: |
           curl -L -o D:\Files\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
+      # =========================
+      # DRIVER NVIDIA
+      # =========================
       - name: Baixar Driver
         run: |
           curl -L -o D:\Files\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
@@ -81,7 +92,7 @@ jobs:
           7z x W10UI_10.59b.zip -oD:\Files -y
 
       # =========================
-      # CONFIG (SEM INPUT)
+      # CONFIG (SEM INPUT / SEM ISO)
       # =========================
       - name: Criar W10UI.ini
         run: |
@@ -89,7 +100,7 @@ jobs:
           echo [W10UI]
           echo AutoStart=1
           echo Silent=1
-          echo Target=%DRIVE%:\
+          echo Target=D:\Files\WIM\install.wim
           echo Repo=D:\Files\Updates
           echo AddUpdates=1
           echo Cleanup=1
@@ -102,7 +113,7 @@ jobs:
           ) > D:\Files\W10UI.ini
 
       # =========================
-      # EXECUÇÃO (SEM INPUT)
+      # EXECUTAR W10UI
       # =========================
       - name: Rodar W10UI
         run: |
@@ -110,28 +121,31 @@ jobs:
           W10UI.cmd
 
       # =========================
-      # DESMONTAR ISO
-      # =========================
-      - name: Desmontar ISO
-        shell: powershell
-        run: |
-          $iso = Get-ChildItem D:\Files\*.iso | Select-Object -First 1
-          Dismount-DiskImage -ImagePath $iso.FullName
-
-      # =========================
-      # ISO FINAL
+      # VALIDAR ISO FINAL
       # =========================
       - name: Detectar ISO final
         run: |
           set FINALISO=
           for %%i in (D:\Files\*19044*.iso) do set FINALISO=%%i
-          if "%FINALISO%"=="" exit /b 1
+
+          if "%FINALISO%"=="" (
+            echo ERRO: ISO final nao encontrada
+            dir D:\Files\
+            exit /b 1
+          )
+
           echo FINALISO=%FINALISO% >> %GITHUB_ENV%
 
+      # =========================
+      # COMPACTAR
+      # =========================
       - name: Compactar ISO
         run: |
           7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z "%FINALISO%"
 
+      # =========================
+      # UPLOAD
+      # =========================
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
