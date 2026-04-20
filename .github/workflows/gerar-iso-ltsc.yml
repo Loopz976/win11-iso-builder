@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (FINAL ABSOLUTO PRO)
+name: Gerar ISO Windows 10 LTSC (FINAL DEFINITIVO)
 
 on:
   workflow_dispatch:
@@ -26,7 +26,7 @@ jobs:
           mkdir D:\Files\Drivers\OS
 
       # =========================
-      # BAIXAR ISO (MULTIPART)
+      # BAIXAR ISO (3 PARTES)
       # =========================
       - name: Baixar ISO
         run: |
@@ -40,18 +40,18 @@ jobs:
           if not exist D:\Files\base.7z.002 exit /b 1
           if not exist D:\Files\base.7z.003 exit /b 1
 
-      - name: Testar integridade
+      - name: Testar integridade 7z
         run: |
           7z t D:\Files\base.7z.001
 
-      - name: Extrair pacote
+      - name: Extrair pacote base
         run: |
           7z x D:\Files\base.7z.001 -oD:\Files\ISO -y
 
       # =========================
-      # MOVER ISO BASE
+      # MOVER ISO
       # =========================
-      - name: Mover ISO base
+      - name: Mover ISO
         run: |
           for /r D:\Files\ISO %%i in (*.iso) do (
               move "%%i" D:\Files\
@@ -62,6 +62,22 @@ jobs:
           dir D:\Files\*.iso || exit /b 1
 
       # =========================
+      # EXTRAIR ISO → DVD
+      # =========================
+      - name: Extrair ISO para DVD
+        run: |
+          mkdir D:\Files\DVD
+          for %%i in (D:\Files\*.iso) do (
+              7z x "%%i" -oD:\Files\DVD -y
+          )
+
+      - name: Validar estrutura DVD
+        run: |
+          if not exist D:\Files\DVD\sources\install.wim (
+            if not exist D:\Files\DVD\sources\install.esd exit /b 1
+          )
+
+      # =========================
       # UPDATE
       # =========================
       - name: Baixar Update
@@ -69,7 +85,7 @@ jobs:
           curl -L -o D:\Files\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
-      # DRIVER
+      # DRIVER NVIDIA
       # =========================
       - name: Baixar Driver
         run: |
@@ -107,29 +123,27 @@ jobs:
           ) > D:\Files\W10UI.ini
 
       # =========================
-      # EXECUTAR W10UI (INPUT AUTO)
+      # EXECUTAR W10UI (TARGET CORRETO)
       # =========================
       - name: Rodar W10UI
         run: |
           cd /d D:\Files
-          for %%i in (*.iso) do set ISOFILE=%%i
 
           (
             echo 1
-            echo D:\Files\%ISOFILE%
+            echo D:\Files\DVD
             echo 0
           ) | W10UI.cmd
 
       # =========================
-      # VALIDAR ISO FINAL REAL
+      # VALIDAR ISO FINAL
       # =========================
-      - name: Detectar ISO final correta
+      - name: Detectar ISO final
         run: |
           set FINALISO=
 
-          for %%i in (D:\Files\*.iso) do (
-              echo Encontrado: %%~nxi
-              echo %%~nxi | findstr /i "PROD 19044 KB" >nul && set FINALISO=%%i
+          for %%i in (D:\Files\*19044*.iso) do (
+              set FINALISO=%%i
           )
 
           if "%FINALISO%"=="" (
