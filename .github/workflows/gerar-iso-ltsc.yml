@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (FINAL ABSOLUTO)
+name: Gerar ISO Windows 10 LTSC (W10UI CLEAN)
 
 on:
   workflow_dispatch:
@@ -22,11 +22,11 @@ jobs:
         run: |
           if exist D:\Files rmdir /s /q D:\Files
           mkdir D:\Files
-          mkdir D:\Files\Drivers\OS
           mkdir D:\Files\Updates
+          mkdir D:\Files\Drivers\OS
 
       # =========================
-      # DOWNLOAD ISO (MULTIPART)
+      # BAIXAR ISO (MULTIPART)
       # =========================
       - name: Baixar ISO
         run: |
@@ -49,42 +49,20 @@ jobs:
           7z x D:\Files\base.7z.001 -oD:\Files\ISO -y
 
       # =========================
-      # LOCALIZAR ISO ORIGINAL
+      # MOVER ISO PRA RAIZ
       # =========================
-      - name: Encontrar ISO
+      - name: Mover ISO para raiz
         run: |
-          set FOUND=0
           for /r D:\Files\ISO %%i in (*.iso) do (
               move "%%i" D:\Files\
-              set FOUND=1
-          )
-          if %FOUND%==0 exit /b 1
-
-      # =========================
-      # EXTRAIR ISO → DVD
-      # =========================
-      - name: Extrair ISO para DVD
-        run: |
-          mkdir D:\Files\DVD
-          for %%i in (D:\Files\*.iso) do (
-              7z x "%%i" -oD:\Files\DVD -y
           )
 
-      - name: Validar estrutura Windows
+      - name: Validar ISO
         run: |
-          if not exist D:\Files\DVD\sources\install.wim (
-            if not exist D:\Files\DVD\sources\install.esd exit /b 1
-          )
+          dir D:\Files\*.iso || exit /b 1
 
       # =========================
-      # REMOVER ISO ORIGINAL (CRÍTICO)
-      # =========================
-      - name: Remover ISO original
-        run: |
-          del /f /q D:\Files\*.iso
-
-      # =========================
-      # UPDATE
+      # UPDATE (LOCAL CORRETO)
       # =========================
       - name: Baixar Update
         run: |
@@ -109,7 +87,7 @@ jobs:
           7z x W10UI_10.59b.zip -oD:\Files -y
 
       # =========================
-      # CONFIG FINAL
+      # CONFIG (SEM TARGET!)
       # =========================
       - name: Criar W10UI.ini
         run: |
@@ -117,7 +95,6 @@ jobs:
           echo [W10UI]
           echo AutoStart=1
           echo Silent=1
-          echo Target=D:\Files\DVD
           echo Repo=D:\Files\Updates
           echo AddUpdates=1
           echo Cleanup=1
@@ -145,7 +122,7 @@ jobs:
           dir D:\Files\*.iso || exit /b 1
 
       # =========================
-      # PEGAR ISO FINAL
+      # DETECTAR ISO FINAL
       # =========================
       - name: Detectar ISO final
         run: |
@@ -153,14 +130,14 @@ jobs:
           echo FINALISO=%FINALISO% >> %GITHUB_ENV%
 
       # =========================
-      # COMPRESSÃO FINAL
+      # COMPRESSÃO
       # =========================
       - name: Compactar ISO
         run: |
           7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z %FINALISO%
 
       # =========================
-      # UPLOAD RELEASE
+      # UPLOAD
       # =========================
       - name: Upload Release
         uses: softprops/action-gh-release@v2
