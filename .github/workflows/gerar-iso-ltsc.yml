@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (W10UI Full Auto)
+name: Gerar ISO Windows 10 LTSC (W10UI + CACHE)
 
 on:
   workflow_dispatch:
@@ -8,47 +8,70 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repositório
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Criar estrutura base
+      - name: Criar estrutura
         run: |
           mkdir D:\Files
           mkdir D:\Files\Drivers\OS
 
-      # 📥 ISO BASE
-      - name: Baixar ISO base (3 partes)
+      # 🧠 CACHE ISO BASE
+      - name: Cache ISO Base
+        id: cache-iso
+        uses: actions/cache@v4
+        with:
+          path: D:\Files\base.7z.*
+          key: iso-base-v1
+
+      - name: Baixar ISO (se não estiver em cache)
+        if: steps.cache-iso.outputs.cache-hit != 'true'
         run: |
           curl -L -o D:\Files\base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
           curl -L -o D:\Files\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
           curl -L -o D:\Files\base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
 
-      - name: Extrair ISO base
-        run: |
-          7z x D:\Files\base.7z.001 -oD:\Files\ISO
+      - name: Extrair ISO
+        run: 7z x D:\Files\base.7z.001 -oD:\Files\ISO
 
-      - name: Mover ISO para raiz
-        run: |
-          move D:\Files\ISO\*.iso D:\Files\
+      - name: Mover ISO
+        run: move D:\Files\ISO\*.iso D:\Files\
 
-      # 📥 UPDATE
-      - name: Baixar KB cumulativo
+      # 🧠 CACHE DRIVER
+      - name: Cache Driver NVIDIA
+        id: cache-driver
+        uses: actions/cache@v4
+        with:
+          path: D:\Files\nvidia.zip
+          key: nvidia-driver-v1
+
+      - name: Baixar Driver (se necessário)
+        if: steps.cache-driver.outputs.cache-hit != 'true'
+        run: |
+          curl -L -o D:\Files\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
+
+      - name: Extrair Driver
+        run: 7z x D:\Files\nvidia.zip -oD:\Files\Drivers\OS
+
+      # 📥 UPDATE (SEM CACHE — MUDA SEMPRE)
+      - name: Baixar Update
         run: |
           curl -L -o D:\Files\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
-      # 📥 DRIVER NVIDIA
-      - name: Baixar driver NVIDIA
-        run: |
-          curl -L -o D:\Files\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
-          7z x D:\Files\nvidia.zip -oD:\Files\Drivers\OS
+      # 🧠 CACHE W10UI
+      - name: Cache W10UI
+        id: cache-w10ui
+        uses: actions/cache@v4
+        with:
+          path: D:\Files\W10UI.cmd
+          key: w10ui-v1
 
-      # 📥 W10UI
-      - name: Extrair W10UI
-        run: |
-          7z x W10UI_10.59b.zip -oD:\Files
+      - name: Extrair W10UI (se necessário)
+        if: steps.cache-w10ui.outputs.cache-hit != 'true'
+        run: 7z x W10UI_10.59b.zip -oD:\Files
 
-      # ⚙️ CONFIG REAL (baseada no comportamento interno do W10UI)
-      - name: Criar W10UI.ini otimizado
+      # ⚙️ CONFIG
+      - name: Configurar W10UI
         run: |
           (
           echo [W10UI]
@@ -63,33 +86,29 @@ jobs:
           echo ISO=1
           ) > D:\Files\W10UI.ini
 
-      # 🚀 EXECUÇÃO (modo real)
-      - name: Executar W10UI
+      # 🚀 EXECUÇÃO
+      - name: Rodar W10UI
         run: |
           cd /d D:\Files
           call W10UI.cmd
 
-      # 🔍 DETECTAR ISO FINAL (garante pegar a correta)
-      - name: Detectar ISO gerada
+      # 🔍 ISO FINAL
+      - name: Detectar ISO
         shell: cmd
         run: |
           for %%i in (D:\Files\*.iso) do set FINALISO=%%i
           echo FINALISO=%FINALISO% >> %GITHUB_ENV%
 
-      # ❌ FAIL se não gerou
       - name: Validar ISO
         run: |
-          if not exist %FINALISO% (
-            echo ISO não gerada!
-            exit 1
-          )
+          if not exist %FINALISO% exit 1
 
-      # 📦 COMPRESSÃO 1900MB
-      - name: Compactar ISO (split 1900MB)
+      # 📦 SPLIT
+      - name: Compactar 1900MB
         run: |
           7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z %FINALISO%
 
-      # 🚀 UPLOAD FINAL
+      # 🚀 RELEASE
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
