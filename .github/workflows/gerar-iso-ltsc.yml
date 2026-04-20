@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (FINAL MONTANDO ISO)
+name: Gerar ISO Windows 10 LTSC (FINAL DEFINITIVO)
 
 on:
   workflow_dispatch:
@@ -53,7 +53,7 @@ jobs:
           dir D:\Files\*.iso || exit /b 1
 
       # =========================
-      # MONTAR ISO (CHAVE FINAL)
+      # MONTAR ISO (IGUAL PC)
       # =========================
       - name: Montar ISO
         shell: powershell
@@ -63,6 +63,11 @@ jobs:
           $drive = (Get-DiskImage $iso.FullName | Get-Volume).DriveLetter
           echo "DRIVE=$drive" >> $env:GITHUB_ENV
 
+      - name: Debug drive
+        run: |
+          echo DRIVE=%DRIVE%
+          dir %DRIVE%:\
+
       # =========================
       # UPDATE
       # =========================
@@ -71,7 +76,7 @@ jobs:
           curl -L -o D:\Files\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
-      # DRIVER
+      # DRIVER NVIDIA
       # =========================
       - name: Baixar Driver
         run: |
@@ -109,18 +114,20 @@ jobs:
           ) > D:\Files\W10UI.ini
 
       # =========================
-      # EXECUÇÃO (USANDO DRIVE MONTADO)
+      # EXECUTAR W10UI (INPUT CORRETO)
       # =========================
       - name: Rodar W10UI
         run: |
           cd /d D:\Files
 
-          (
-            echo 1
-            echo %DRIVE%:\
-            echo 0
-            echo 9
-          ) | W10UI.cmd
+          echo 1>input.txt
+          echo %DRIVE%:\>>input.txt
+          echo 0>>input.txt
+          echo 9>>input.txt
+
+          type input.txt
+
+          W10UI.cmd < input.txt
 
       # =========================
       # DESMONTAR ISO
@@ -139,12 +146,16 @@ jobs:
           set FINALISO=
           for %%i in (D:\Files\*19044*.iso) do set FINALISO=%%i
 
-          if "%FINALISO%"=="" exit /b 1
+          if "%FINALISO%"=="" (
+              echo ERRO: ISO final nao encontrada
+              dir D:\Files\
+              exit /b 1
+          )
 
           echo FINALISO=%FINALISO% >> %GITHUB_ENV%
 
       # =========================
-      # COMPRESSÃO
+      # COMPACTAR
       # =========================
       - name: Compactar ISO
         run: |
