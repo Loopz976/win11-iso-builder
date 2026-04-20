@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (WIM DIRECT - FINAL)
+name: Gerar ISO Windows 10 LTSC FINAL
 
 on:
   workflow_dispatch:
@@ -15,18 +15,19 @@ jobs:
       - uses: actions/checkout@v4
 
       # =========================
-      # AMBIENTE
+      # PREPARAR
       # =========================
       - name: Preparar ambiente
         run: |
           if exist D:\Files rmdir /s /q D:\Files
           mkdir D:\Files
+          mkdir D:\Files\ISO
+          mkdir D:\Files\WIM
           mkdir D:\Files\Updates
           mkdir D:\Files\Drivers\OS
-          mkdir D:\Files\WIM
 
       # =========================
-      # BAIXAR ISO (MULTIPART)
+      # BAIXAR ISO
       # =========================
       - name: Baixar ISO
         run: |
@@ -34,24 +35,20 @@ jobs:
           curl -L -o D:\Files\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
           curl -L -o D:\Files\base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
-      - name: Testar 7z
+      - name: Testar arquivos
         run: |
           7z t D:\Files\base.7z.001
 
-      - name: Extrair pacote
+      - name: Extrair ISO
         run: |
           7z x D:\Files\base.7z.001 -oD:\Files\ISO -y
 
-      - name: Mover ISO para raiz
+      - name: Mover ISO
         run: |
           for /r D:\Files\ISO %%i in (*.iso) do move "%%i" D:\Files\
 
-      - name: Validar ISO
-        run: |
-          dir D:\Files\*.iso || exit /b 1
-
       # =========================
-      # EXTRAIR install.wim DIRETO DA ISO
+      # EXTRAIR INSTALL.WIM
       # =========================
       - name: Extrair install.wim
         run: |
@@ -61,10 +58,7 @@ jobs:
 
       - name: Validar WIM
         run: |
-          if not exist D:\Files\WIM\install.wim (
-            echo ERRO: install.wim nao encontrado
-            exit /b 1
-          )
+          if not exist D:\Files\WIM\install.wim exit /b 1
 
       # =========================
       # UPDATE
@@ -74,9 +68,9 @@ jobs:
           curl -L -o D:\Files\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
-      # DRIVER NVIDIA
+      # DRIVER
       # =========================
-      - name: Baixar Driver
+      - name: Baixar Driver NVIDIA
         run: |
           curl -L -o D:\Files\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
 
@@ -92,28 +86,27 @@ jobs:
           7z x W10UI_10.59b.zip -oD:\Files -y
 
       # =========================
-      # CONFIG (SEM INPUT / SEM ISO)
+      # CONFIG CORRETA
       # =========================
       - name: Criar W10UI.ini
         run: |
           (
           echo [W10UI]
-          echo AutoStart=1
-          echo Silent=1
-          echo Target=D:\Files\WIM\install.wim
-          echo Repo=D:\Files\Updates
-          echo AddUpdates=1
+          echo AutoStart=Yes
+          echo Silent=Yes
+          echo Target=D:\Files\WIM
+          echo Updates=D:\Files\Updates
+          echo Drivers=D:\Files\Drivers\OS
           echo Cleanup=1
           echo ResetBase=1
           echo Rebuild=1
-          echo AddDrivers=1
           echo wim2esd=1
           echo esdcompress=4
           echo ISO=1
           ) > D:\Files\W10UI.ini
 
       # =========================
-      # EXECUTAR W10UI
+      # RODAR W10UI
       # =========================
       - name: Rodar W10UI
         run: |
@@ -129,7 +122,7 @@ jobs:
           for %%i in (D:\Files\*19044*.iso) do set FINALISO=%%i
 
           if "%FINALISO%"=="" (
-            echo ERRO: ISO final nao encontrada
+            echo ERRO: ISO nao gerada
             dir D:\Files\
             exit /b 1
           )
