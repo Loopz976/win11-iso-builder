@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (W10UI + CACHE FIX)
+name: Gerar ISO Windows 10 LTSC (W10UI FINAL CMD)
 
 on:
   workflow_dispatch:
@@ -6,6 +6,10 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: cmd
 
     steps:
       - name: Checkout
@@ -16,7 +20,9 @@ jobs:
           mkdir D:\Files
           mkdir D:\Files\Drivers\OS
 
-      # 🧠 CACHE ISO (AGORA CORRETO)
+      # =========================
+      # CACHE ISO BASE
+      # =========================
       - name: Cache ISO Base
         id: cache-iso
         uses: actions/cache@v4
@@ -25,9 +31,8 @@ jobs:
             D:\Files\base.7z.001
             D:\Files\base.7z.002
             D:\Files\base.7z.003
-          key: iso-base-v2
+          key: iso-base-v3
 
-      # 📥 DOWNLOAD FORÇADO SE NECESSÁRIO
       - name: Baixar ISO completa
         if: steps.cache-iso.outputs.cache-hit != 'true'
         run: |
@@ -35,48 +40,53 @@ jobs:
           curl -L -o D:\Files\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
           curl -L -o D:\Files\base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
 
-      # 🔍 VALIDAR PARTES
       - name: Validar arquivos ISO
         run: |
-          if not exist D:\Files\base.7z.001 exit 1
-          if not exist D:\Files\base.7z.002 exit 1
-          if not exist D:\Files\base.7z.003 exit 1
+          if not exist D:\Files\base.7z.001 exit /b 1
+          if not exist D:\Files\base.7z.002 exit /b 1
+          if not exist D:\Files\base.7z.003 exit /b 1
 
-      # 🧪 TESTAR ARQUIVO 7Z
       - name: Testar integridade 7z
         run: |
           7z t D:\Files\base.7z.001
 
-      # 📦 EXTRAÇÃO SEGURA
       - name: Extrair ISO
         run: |
           7z x D:\Files\base.7z.001 -oD:\Files\ISO -y
 
       - name: Mover ISO
-        run: move D:\Files\ISO\*.iso D:\Files\
+        run: |
+          move D:\Files\ISO\*.iso D:\Files\
 
-      # 📥 UPDATE
+      # =========================
+      # UPDATE
+      # =========================
       - name: Baixar Update
         run: |
           curl -L -o D:\Files\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
-      # 🧠 CACHE DRIVER
-      - name: Cache Driver NVIDIA
+      # =========================
+      # DRIVER NVIDIA
+      # =========================
+      - name: Cache Driver
         id: cache-driver
         uses: actions/cache@v4
         with:
           path: D:\Files\nvidia.zip
           key: nvidia-driver-v1
 
-      - name: Baixar Driver (se necessário)
+      - name: Baixar Driver
         if: steps.cache-driver.outputs.cache-hit != 'true'
         run: |
           curl -L -o D:\Files\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
 
       - name: Extrair Driver
-        run: 7z x D:\Files\nvidia.zip -oD:\Files\Drivers\OS -y
+        run: |
+          7z x D:\Files\nvidia.zip -oD:\Files\Drivers\OS -y
 
-      # 🧠 CACHE W10UI
+      # =========================
+      # W10UI
+      # =========================
       - name: Cache W10UI
         id: cache-w10ui
         uses: actions/cache@v4
@@ -84,13 +94,15 @@ jobs:
           path: D:\Files\W10UI.cmd
           key: w10ui-v1
 
-      - name: Extrair W10UI (se necessário)
+      - name: Extrair W10UI
         if: steps.cache-w10ui.outputs.cache-hit != 'true'
-        run: 7z x W10UI_10.59b.zip -oD:\Files -y
+        run: |
+          7z x W10UI_10.59b.zip -oD:\Files -y
 
-      # ⚙️ CONFIG
-      - name: Configurar W10UI
-        shell: cmd
+      # =========================
+      # CONFIG W10UI
+      # =========================
+      - name: Criar W10UI.ini
         run: |
           (
           echo [W10UI]
@@ -105,29 +117,36 @@ jobs:
           echo ISO=1
           ) > D:\Files\W10UI.ini
 
-      # 🚀 EXECUÇÃO
+      # =========================
+      # EXECUÇÃO
+      # =========================
       - name: Rodar W10UI
         run: |
           cd /d D:\Files
           call W10UI.cmd
 
-      # 🔍 DETECTAR ISO
+      # =========================
+      # DETECTAR ISO FINAL
+      # =========================
       - name: Detectar ISO
-        shell: cmd
         run: |
           for %%i in (D:\Files\*.iso) do set FINALISO=%%i
           echo FINALISO=%FINALISO% >> %GITHUB_ENV%
 
       - name: Validar ISO
         run: |
-          if not exist %FINALISO% exit 1
+          if not exist %FINALISO% exit /b 1
 
-      # 📦 COMPACTAR
-      - name: Compactar 1900MB
+      # =========================
+      # COMPRESSÃO FINAL
+      # =========================
+      - name: Compactar ISO
         run: |
           7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z %FINALISO%
 
-      # 🚀 RELEASE
+      # =========================
+      # RELEASE
+      # =========================
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
