@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # =========================
-      # PREPARAR
+      # PREPARAR AMBIENTE
       # =========================
       - name: Preparar ambiente
         run: |
@@ -23,11 +23,12 @@ jobs:
           mkdir D:\Files
           mkdir D:\Files\ISO
           mkdir D:\Files\WIM
+          mkdir D:\Files\DVD\sources
           mkdir D:\Files\Updates
           mkdir D:\Files\Drivers\OS
 
       # =========================
-      # BAIXAR ISO
+      # BAIXAR ISO BASE
       # =========================
       - name: Baixar ISO
         run: |
@@ -56,9 +57,9 @@ jobs:
             7z e "%%i" sources\install.wim -oD:\Files\WIM -y
           )
 
-      - name: Validar WIM
+      - name: Preparar estrutura DVD
         run: |
-          if not exist D:\Files\WIM\install.wim exit /b 1
+          copy D:\Files\WIM\install.wim D:\Files\DVD\sources\
 
       # =========================
       # UPDATE
@@ -68,9 +69,9 @@ jobs:
           curl -L -o D:\Files\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
-      # DRIVER
+      # DRIVER NVIDIA
       # =========================
-      - name: Baixar Driver NVIDIA
+      - name: Baixar Driver
         run: |
           curl -L -o D:\Files\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
 
@@ -79,34 +80,29 @@ jobs:
           7z x D:\Files\nvidia.zip -oD:\Files\Drivers\OS -y
 
       # =========================
-      # W10UI
+      # W10UI ORIGINAL
       # =========================
-      - name: Extrair W10UI
+      - name: Extrair W10UI original
         run: |
           7z x W10UI_10.59b.zip -oD:\Files -y
 
       # =========================
-      # CONFIG CORRETA
+      # SUBSTITUIR INI
       # =========================
-      - name: Criar W10UI.ini
+      - name: Remover ini original
         run: |
-          (
-          echo [W10UI]
-          echo AutoStart=Yes
-          echo Silent=Yes
-          echo Target=D:\Files\WIM
-          echo Updates=D:\Files\Updates
-          echo Drivers=D:\Files\Drivers\OS
-          echo Cleanup=1
-          echo ResetBase=1
-          echo Rebuild=1
-          echo wim2esd=1
-          echo esdcompress=4
-          echo ISO=1
-          ) > D:\Files\W10UI.ini
+          if exist D:\Files\W10UI.ini del D:\Files\W10UI.ini
+
+      - name: Baixar INI correto
+        run: |
+          curl -L -o D:\Files\ini.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/ini/W10UI_ini_ajustado.zip
+
+      - name: Aplicar INI correto
+        run: |
+          7z x D:\Files\ini.zip -oD:\Files -y
 
       # =========================
-      # RODAR W10UI
+      # EXECUTAR W10UI
       # =========================
       - name: Rodar W10UI
         run: |
@@ -114,7 +110,7 @@ jobs:
           W10UI.cmd
 
       # =========================
-      # VALIDAR ISO FINAL
+      # DETECTAR ISO FINAL
       # =========================
       - name: Detectar ISO final
         run: |
