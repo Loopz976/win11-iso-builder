@@ -27,17 +27,13 @@ jobs:
           mkdir D:\Files\Drivers\OS
 
       # =========================
-      # BAIXAR ISO (PARTES)
+      # BAIXAR ISO
       # =========================
       - name: Baixar ISO
         run: |
           curl -L -o D:\Files\base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
           curl -L -o D:\Files\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
           curl -L -o D:\Files\base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
-
-      - name: Testar arquivos
-        run: |
-          7z t D:\Files\base.7z.001
 
       - name: Extrair ISO
         run: |
@@ -48,7 +44,7 @@ jobs:
           for /r D:\Files\ISO %%i in (*.iso) do move "%%i" D:\Files\
 
       # =========================
-      # EXTRAIR ISO COMPLETA (CORREÇÃO FINAL)
+      # EXTRAIR ISO COMPLETA
       # =========================
       - name: Extrair ISO COMPLETA
         run: |
@@ -75,7 +71,7 @@ jobs:
           curl -L -o D:\Files\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
-      # DRIVER NVIDIA
+      # DRIVER
       # =========================
       - name: Baixar Driver NVIDIA
         run: |
@@ -86,19 +82,22 @@ jobs:
           7z x D:\Files\nvidia.zip -oD:\Files\Drivers\OS -y
 
       # =========================
-      # W10UI
+      # BAIXAR W10UI ORIGINAL
       # =========================
-      - name: Extrair W10UI
+      - name: Baixar W10UI original
         run: |
-          7z x W10UI_10.59b.zip -oD:\Files -y
+          curl -L -o D:\Files\w10ui.zip https://github.com/abbodi1406/BatUtil/archive/refs/heads/master.zip
 
-      - name: Remover ini original
+      - name: Extrair W10UI original
         run: |
-          if exist D:\Files\W10UI.ini del D:\Files\W10UI.ini
+          7z x D:\Files\w10ui.zip -oD:\Files -y
 
-      - name: Baixar INI correto
+      # =========================
+      # APLICAR CMD MODIFICADO
+      # =========================
+      - name: Aplicar CMD modificado
         run: |
-          curl -L -o D:\Files\W10UI.ini https://raw.githubusercontent.com/Loopz976/ltsc-auto-builder/main/W10UI.ini
+          7z x W10UI_modificado.zip -oD:\Files -y
 
       # =========================
       # RODAR W10UI
