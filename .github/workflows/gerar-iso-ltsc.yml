@@ -28,7 +28,7 @@ jobs:
           mkdir D:\Files\Drivers
 
       # =========================
-      # BAIXAR ISO BASE
+      # BAIXAR ISO
       # =========================
       - name: Baixar ISO
         run: |
@@ -79,11 +79,18 @@ jobs:
           dism /Mount-Wim /WimFile:D:\Files\DVD\sources\install.wim /index:1 /MountDir:D:\Files\MOUNT
 
       # =========================
-      # INTEGRAR UPDATE
+      # FIX SERVICING (CRÍTICO)
+      # =========================
+      - name: Preparar imagem (fix servicing)
+        run: |
+          dism /Image:D:\Files\MOUNT /Cleanup-Image /StartComponentCleanup
+
+      # =========================
+      # INTEGRAR UPDATE (CORRIGIDO)
       # =========================
       - name: Integrar update
         run: |
-          dism /Image:D:\Files\MOUNT /Add-Package /PackagePath:D:\Files\Updates
+          dism /Image:D:\Files\MOUNT /Add-Package /PackagePath:D:\Files\Updates\update.msu /IgnoreCheck
 
       # =========================
       # INTEGRAR DRIVERS
@@ -100,14 +107,14 @@ jobs:
           dism /Image:D:\Files\MOUNT /Enable-Feature /FeatureName:NetFx3 /All /Source:D:\Files\DVD\sources\sxs /LimitAccess
 
       # =========================
-      # CLEANUP + RESETBASE
+      # CLEANUP FINAL PESADO
       # =========================
-      - name: Cleanup
+      - name: Cleanup final
         run: |
           dism /Image:D:\Files\MOUNT /Cleanup-Image /StartComponentCleanup /ResetBase
 
       # =========================
-      # DESMONTAR E SALVAR
+      # COMMIT
       # =========================
       - name: Commit imagem
         run: |
@@ -125,7 +132,7 @@ jobs:
           del D:\Files\DVD\sources\install.wim
 
       # =========================
-      # GERAR ISO
+      # CRIAR ISO
       # =========================
       - name: Criar ISO
         run: |
