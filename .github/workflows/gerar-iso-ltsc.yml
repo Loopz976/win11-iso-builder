@@ -22,13 +22,12 @@ jobs:
           if exist D:\Files rmdir /s /q D:\Files
           mkdir D:\Files
           mkdir D:\Files\ISO
-          mkdir D:\Files\WIM
-          mkdir D:\Files\DVD\sources
+          mkdir D:\Files\DVD
           mkdir D:\Files\Updates
           mkdir D:\Files\Drivers\OS
 
       # =========================
-      # BAIXAR ISO BASE (3 PARTES)
+      # BAIXAR ISO (PARTES)
       # =========================
       - name: Baixar ISO
         run: |
@@ -49,17 +48,24 @@ jobs:
           for /r D:\Files\ISO %%i in (*.iso) do move "%%i" D:\Files\
 
       # =========================
-      # EXTRAIR INSTALL.WIM
+      # EXTRAIR ISO COMPLETA (CORREÇÃO FINAL)
       # =========================
-      - name: Extrair install.wim
+      - name: Extrair ISO COMPLETA
         run: |
           for %%i in (D:\Files\*.iso) do (
-            7z e "%%i" sources\install.wim -oD:\Files\WIM -y
+            7z x "%%i" -oD:\Files\DVD -y
           )
 
-      - name: Preparar estrutura DVD
+      # =========================
+      # VALIDAR TARGET
+      # =========================
+      - name: Validar estrutura
         run: |
-          copy D:\Files\WIM\install.wim D:\Files\DVD\sources\
+          if not exist D:\Files\DVD\sources\install.wim (
+            echo ERRO: install.wim nao encontrado
+            dir D:\Files\DVD\sources
+            exit /b 1
+          )
 
       # =========================
       # UPDATE
@@ -80,15 +86,12 @@ jobs:
           7z x D:\Files\nvidia.zip -oD:\Files\Drivers\OS -y
 
       # =========================
-      # W10UI ORIGINAL
+      # W10UI
       # =========================
       - name: Extrair W10UI
         run: |
           7z x W10UI_10.59b.zip -oD:\Files -y
 
-      # =========================
-      # APLICAR INI CORRETO (SEM ZIP)
-      # =========================
       - name: Remover ini original
         run: |
           if exist D:\Files\W10UI.ini del D:\Files\W10UI.ini
@@ -122,14 +125,14 @@ jobs:
           echo FINALISO=%FINALISO% >> %GITHUB_ENV%
 
       # =========================
-      # COMPACTAR EM 1900MB
+      # COMPACTAR
       # =========================
       - name: Compactar ISO
         run: |
           7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z "%FINALISO%"
 
       # =========================
-      # UPLOAD RELEASE
+      # UPLOAD
       # =========================
       - name: Upload Release
         uses: softprops/action-gh-release@v2
