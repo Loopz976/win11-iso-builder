@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (W10UI CLEAN NO CACHE)
+name: Gerar ISO Windows 10 LTSC (W10UI FINAL)
 
 on:
   workflow_dispatch:
@@ -22,36 +22,47 @@ jobs:
           mkdir D:\Files\Drivers\OS
 
       # =========================
-      # DOWNLOAD ISO (3 PARTES)
+      # DOWNLOAD ISO (MULTIPART)
       # =========================
-      - name: Baixar ISO completa
+      - name: Baixar ISO (3 partes)
         run: |
-          curl -L -o D:\Files\base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
-          curl -L -o D:\Files\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
-          curl -L -o D:\Files\base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
+          curl -L -o D:\Files\base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
+          curl -L -o D:\Files\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
+          curl -L -o D:\Files\base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
-      - name: Validar arquivos ISO
+      - name: Validar partes
         run: |
           if not exist D:\Files\base.7z.001 exit /b 1
           if not exist D:\Files\base.7z.002 exit /b 1
           if not exist D:\Files\base.7z.003 exit /b 1
 
-      - name: Testar integridade 7z
+      - name: Testar integridade
         run: |
           7z t D:\Files\base.7z.001
 
-      - name: Extrair ISO
+      - name: Extrair pacote
         run: |
           7z x D:\Files\base.7z.001 -oD:\Files\ISO -y
 
-      - name: Mover ISO (blindado)
+      # =========================
+      # LOCALIZAR ISO REAL
+      # =========================
+      - name: Encontrar ISO original
         run: |
-          del /f /q D:\Files\*.iso >nul 2>&1
+          set FOUND=0
+
           for /r D:\Files\ISO %%i in (*.iso) do (
+              echo ISO encontrada: %%i
               move "%%i" D:\Files\
+              set FOUND=1
           )
 
-      - name: Validar ISO extraída
+          if %FOUND%==0 (
+              echo ERRO: ISO nao encontrada dentro do pacote
+              exit /b 1
+          )
+
+      - name: Validar ISO
         run: |
           dir D:\Files\*.iso || exit /b 1
 
@@ -65,7 +76,7 @@ jobs:
       # =========================
       # DRIVER NVIDIA
       # =========================
-      - name: Baixar Driver NVIDIA
+      - name: Baixar Driver
         run: |
           curl -L -o D:\Files\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
 
@@ -107,7 +118,7 @@ jobs:
           call W10UI.cmd
 
       # =========================
-      # DETECTAR ISO FINAL
+      # ISO FINAL
       # =========================
       - name: Detectar ISO final
         run: |
@@ -119,9 +130,9 @@ jobs:
           if not exist %FINALISO% exit /b 1
 
       # =========================
-      # COMPRESSÃO FINAL
+      # COMPRESSÃO
       # =========================
-      - name: Compactar ISO 1900MB
+      - name: Compactar ISO
         run: |
           7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z %FINALISO%
 
