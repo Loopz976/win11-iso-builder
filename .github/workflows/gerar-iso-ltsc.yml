@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # =========================
-      # PREPARAR
+      # PREPARAR AMBIENTE
       # =========================
       - name: Preparar ambiente
         run: |
@@ -27,7 +27,7 @@ jobs:
           mkdir D:\Files\Drivers\OS
 
       # =========================
-      # ISO BASE
+      # BAIXAR ISO
       # =========================
       - name: Baixar ISO
         run: |
@@ -44,7 +44,7 @@ jobs:
           for /r D:\Files\ISO %%i in (*.iso) do move "%%i" D:\Files\
 
       # =========================
-      # EXTRAIR ISO COMPLETA (CRÍTICO)
+      # EXTRAIR ISO COMPLETA
       # =========================
       - name: Extrair ISO COMPLETA
         run: |
@@ -53,7 +53,7 @@ jobs:
           )
 
       # =========================
-      # VALIDAR TARGET
+      # VALIDAR ESTRUTURA
       # =========================
       - name: Validar estrutura
         run: |
@@ -82,30 +82,29 @@ jobs:
           7z x D:\Files\nvidia.zip -oD:\Files\Drivers\OS -y
 
       # =========================
-      # W10UI ORIGINAL
+      # BAIXAR W10UI ORIGINAL (ZIP CORRETO)
       # =========================
-      - name: Baixar W10UI
+      - name: Baixar W10UI original
         run: |
-          curl -L -o D:\Files\w10ui.zip https://github.com/abbodi1406/BatUtil/archive/refs/heads/master.zip
+          curl -L -o D:\Files\w10ui.zip https://github.com/abbodi1406/W10UI/archive/refs/tags/10.59b.zip
 
       - name: Extrair W10UI
         run: |
           7z x D:\Files\w10ui.zip -oD:\Files -y
-          xcopy /E /I /Y D:\Files\BatUtil-master\W10UI\* D:\Files\
 
       # =========================
-      # APLICAR CMD MODIFICADO
+      # APLICAR CMD MODIFICADO (NO LUGAR CERTO)
       # =========================
-      - name: Aplicar W10UI modificado
+      - name: Aplicar CMD modificado
         run: |
-          7z x W10UI_modificado.zip -oD:\Files -y
+          7z x W10UI_modificado.zip -oD:\Files\W10UI_10.59b -y
 
       # =========================
-      # RODAR W10UI (AGORA SEM MENU)
+      # RODAR W10UI (DENTRO DA PASTA CORRETA)
       # =========================
       - name: Rodar W10UI
         run: |
-          cd /d D:\Files
+          cd /d D:\Files\W10UI_10.59b
           W10UI.cmd
 
       # =========================
@@ -114,7 +113,9 @@ jobs:
       - name: Detectar ISO final
         run: |
           set FINALISO=
-          for %%i in (D:\Files\*19044*.iso) do set FINALISO=%%i
+          for %%i in (D:\Files\*.iso) do (
+            echo %%i | find "19044" >nul && set FINALISO=%%i
+          )
 
           if "%FINALISO%"=="" (
             echo ERRO: ISO nao gerada
