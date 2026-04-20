@@ -1,4 +1,4 @@
-name: LTSC AUTO BUILD FINAL
+name: LTSC AUTO BUILD DISM FINAL
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # =========================
-      # PREPARAR AMBIENTE
+      # PREPARAR
       # =========================
       - name: Preparar ambiente
         run: |
@@ -23,11 +23,12 @@ jobs:
           mkdir D:\Files
           mkdir D:\Files\ISO
           mkdir D:\Files\DVD
+          mkdir D:\Files\MOUNT
           mkdir D:\Files\Updates
-          mkdir D:\Files\Drivers\OS
+          mkdir D:\Files\Drivers
 
       # =========================
-      # BAIXAR ISO
+      # BAIXAR ISO BASE
       # =========================
       - name: Baixar ISO
         run: |
@@ -53,25 +54,14 @@ jobs:
           )
 
       # =========================
-      # VALIDAR ESTRUTURA
-      # =========================
-      - name: Validar estrutura
-        run: |
-          if not exist D:\Files\DVD\sources\install.wim (
-            echo ERRO: install.wim nao encontrado
-            dir D:\Files\DVD\sources
-            exit /b 1
-          )
-
-      # =========================
-      # UPDATE
+      # BAIXAR UPDATE
       # =========================
       - name: Baixar update
         run: |
           curl -L -o D:\Files\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
-      # DRIVER
+      # BAIXAR DRIVER
       # =========================
       - name: Baixar driver NVIDIA
         run: |
@@ -79,58 +69,74 @@ jobs:
 
       - name: Extrair driver
         run: |
-          7z x D:\Files\nvidia.zip -oD:\Files\Drivers\OS -y
+          7z x D:\Files\nvidia.zip -oD:\Files\Drivers -y
 
       # =========================
-      # BAIXAR W10UI ORIGINAL (ZIP CORRETO)
+      # MONTAR IMAGEM
       # =========================
-      - name: Baixar W10UI original
+      - name: Montar imagem
         run: |
-          curl -L -o D:\Files\w10ui.zip https://github.com/abbodi1406/W10UI/archive/refs/tags/10.59b.zip
+          dism /Mount-Wim /WimFile:D:\Files\DVD\sources\install.wim /index:1 /MountDir:D:\Files\MOUNT
 
-      - name: Extrair W10UI
+      # =========================
+      # INTEGRAR UPDATE
+      # =========================
+      - name: Integrar update
         run: |
-          7z x D:\Files\w10ui.zip -oD:\Files -y
+          dism /Image:D:\Files\MOUNT /Add-Package /PackagePath:D:\Files\Updates
 
       # =========================
-      # APLICAR CMD MODIFICADO (NO LUGAR CERTO)
+      # INTEGRAR DRIVERS
       # =========================
-      - name: Aplicar CMD modificado
+      - name: Integrar drivers
         run: |
-          7z x W10UI_modificado.zip -oD:\Files\W10UI_10.59b -y
+          dism /Image:D:\Files\MOUNT /Add-Driver /Driver:D:\Files\Drivers /Recurse
 
       # =========================
-      # RODAR W10UI (DENTRO DA PASTA CORRETA)
+      # ATIVAR NETFX 3.5
       # =========================
-      - name: Rodar W10UI
+      - name: Ativar .NET 3.5
         run: |
-          cd /d D:\Files\W10UI_10.59b
-          W10UI.cmd
+          dism /Image:D:\Files\MOUNT /Enable-Feature /FeatureName:NetFx3 /All /Source:D:\Files\DVD\sources\sxs /LimitAccess
 
       # =========================
-      # DETECTAR ISO FINAL
+      # CLEANUP + RESETBASE
       # =========================
-      - name: Detectar ISO final
+      - name: Cleanup
         run: |
-          set FINALISO=
-          for %%i in (D:\Files\*.iso) do (
-            echo %%i | find "19044" >nul && set FINALISO=%%i
-          )
+          dism /Image:D:\Files\MOUNT /Cleanup-Image /StartComponentCleanup /ResetBase
 
-          if "%FINALISO%"=="" (
-            echo ERRO: ISO nao gerada
-            dir D:\Files\
-            exit /b 1
-          )
+      # =========================
+      # DESMONTAR E SALVAR
+      # =========================
+      - name: Commit imagem
+        run: |
+          dism /Unmount-Wim /MountDir:D:\Files\MOUNT /Commit
 
-          echo FINALISO=%FINALISO% >> %GITHUB_ENV%
+      # =========================
+      # CONVERTER PARA ESD (MAX)
+      # =========================
+      - name: Converter para ESD
+        run: |
+          dism /Export-Image /SourceImageFile:D:\Files\DVD\sources\install.wim /SourceIndex:1 /DestinationImageFile:D:\Files\DVD\sources\install.esd /Compress:recovery
+
+      - name: Remover WIM
+        run: |
+          del D:\Files\DVD\sources\install.wim
+
+      # =========================
+      # GERAR ISO
+      # =========================
+      - name: Criar ISO
+        run: |
+          oscdimg -m -o -u2 -udfver102 D:\Files\DVD D:\Files\LTSC_FINAL.iso
 
       # =========================
       # COMPACTAR
       # =========================
       - name: Compactar ISO
         run: |
-          7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z "%FINALISO%"
+          7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z D:\Files\LTSC_FINAL.iso
 
       # =========================
       # UPLOAD
