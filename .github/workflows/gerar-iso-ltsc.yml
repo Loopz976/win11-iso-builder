@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (FINAL ABSOLUTO)
+name: Gerar ISO Windows 10 LTSC (FINAL OK)
 
 on:
   workflow_dispatch:
@@ -26,7 +26,7 @@ jobs:
           mkdir D:\Files\Drivers\OS
 
       # =========================
-      # BAIXAR ISO BASE
+      # BAIXAR ISO
       # =========================
       - name: Baixar ISO
         run: |
@@ -51,7 +51,7 @@ jobs:
           dir D:\Files\*.iso || exit /b 1
 
       # =========================
-      # MONTAR ISO
+      # MONTAR ISO (IGUAL PC)
       # =========================
       - name: Montar ISO
         shell: powershell
@@ -59,7 +59,7 @@ jobs:
           $iso = Get-ChildItem D:\Files\*.iso | Select-Object -First 1
           Mount-DiskImage -ImagePath $iso.FullName
           $drive = (Get-DiskImage $iso.FullName | Get-Volume).DriveLetter
-          echo "DRIVE=$drive" >> $env:GITHUB_ENV
+          "DRIVE=$drive" >> $env:GITHUB_ENV
 
       - name: Debug Drive
         run: |
@@ -74,7 +74,7 @@ jobs:
           curl -L -o D:\Files\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
-      # DRIVER NVIDIA
+      # DRIVER
       # =========================
       - name: Baixar Driver
         run: |
@@ -91,9 +91,6 @@ jobs:
         run: |
           7z x W10UI_10.59b.zip -oD:\Files -y
 
-      # =========================
-      # CONFIG
-      # =========================
       - name: Criar W10UI.ini
         run: |
           (
@@ -112,23 +109,23 @@ jobs:
           ) > D:\Files\W10UI.ini
 
       # =========================
-      # EXECUTAR W10UI (FIX FINAL)
+      # RODAR W10UI (FIX REAL)
       # =========================
       - name: Rodar W10UI
         shell: powershell
         run: |
           cd D:\Files
 
-          $drive = "$env:DRIVE`:\"  
+          $drive = "$env:DRIVE`:\"
 
-          $input = @"
-1
-$drive
-0
-9
-"@
+          "1" | Out-File input.txt -Encoding ascii
+          $drive | Out-File input.txt -Append -Encoding ascii
+          "0" | Out-File input.txt -Append -Encoding ascii
+          "9" | Out-File input.txt -Append -Encoding ascii
 
-          $input | cmd /c W10UI.cmd
+          Get-Content input.txt
+
+          cmd /c "W10UI.cmd < input.txt"
 
       # =========================
       # DESMONTAR ISO
