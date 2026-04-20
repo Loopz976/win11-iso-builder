@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (W10UI + CACHE)
+name: Gerar ISO Windows 10 LTSC (W10UI + CACHE FINAL)
 
 on:
   workflow_dispatch:
@@ -24,7 +24,7 @@ jobs:
           path: D:\Files\base.7z.*
           key: iso-base-v1
 
-      - name: Baixar ISO (se não estiver em cache)
+      - name: Baixar ISO (se necessário)
         if: steps.cache-iso.outputs.cache-hit != 'true'
         run: |
           curl -L -o D:\Files\base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
@@ -53,7 +53,7 @@ jobs:
       - name: Extrair Driver
         run: 7z x D:\Files\nvidia.zip -oD:\Files\Drivers\OS
 
-      # 📥 UPDATE (SEM CACHE — MUDA SEMPRE)
+      # 📥 UPDATE
       - name: Baixar Update
         run: |
           curl -L -o D:\Files\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
@@ -70,8 +70,9 @@ jobs:
         if: steps.cache-w10ui.outputs.cache-hit != 'true'
         run: 7z x W10UI_10.59b.zip -oD:\Files
 
-      # ⚙️ CONFIG
+      # ⚙️ CONFIG (CORRIGIDO)
       - name: Configurar W10UI
+        shell: cmd
         run: |
           (
           echo [W10UI]
@@ -92,18 +93,19 @@ jobs:
           cd /d D:\Files
           call W10UI.cmd
 
-      # 🔍 ISO FINAL
+      # 🔍 DETECTAR ISO FINAL
       - name: Detectar ISO
         shell: cmd
         run: |
           for %%i in (D:\Files\*.iso) do set FINALISO=%%i
           echo FINALISO=%FINALISO% >> %GITHUB_ENV%
 
+      # ❌ VALIDAR
       - name: Validar ISO
         run: |
           if not exist %FINALISO% exit 1
 
-      # 📦 SPLIT
+      # 📦 COMPACTAR
       - name: Compactar 1900MB
         run: |
           7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z %FINALISO%
