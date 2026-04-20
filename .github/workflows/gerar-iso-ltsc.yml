@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (W10UI CLEAN)
+name: Gerar ISO Windows 10 LTSC (FINAL ABSOLUTO PRO)
 
 on:
   workflow_dispatch:
@@ -40,7 +40,7 @@ jobs:
           if not exist D:\Files\base.7z.002 exit /b 1
           if not exist D:\Files\base.7z.003 exit /b 1
 
-      - name: Testar 7z
+      - name: Testar integridade
         run: |
           7z t D:\Files\base.7z.001
 
@@ -49,27 +49,27 @@ jobs:
           7z x D:\Files\base.7z.001 -oD:\Files\ISO -y
 
       # =========================
-      # MOVER ISO PRA RAIZ
+      # MOVER ISO BASE
       # =========================
-      - name: Mover ISO para raiz
+      - name: Mover ISO base
         run: |
           for /r D:\Files\ISO %%i in (*.iso) do (
               move "%%i" D:\Files\
           )
 
-      - name: Validar ISO
+      - name: Validar ISO base
         run: |
           dir D:\Files\*.iso || exit /b 1
 
       # =========================
-      # UPDATE (LOCAL CORRETO)
+      # UPDATE
       # =========================
       - name: Baixar Update
         run: |
           curl -L -o D:\Files\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
-      # DRIVER NVIDIA
+      # DRIVER
       # =========================
       - name: Baixar Driver
         run: |
@@ -87,7 +87,7 @@ jobs:
           7z x W10UI_10.59b.zip -oD:\Files -y
 
       # =========================
-      # CONFIG (SEM TARGET!)
+      # CONFIG
       # =========================
       - name: Criar W10UI.ini
         run: |
@@ -107,37 +107,49 @@ jobs:
           ) > D:\Files\W10UI.ini
 
       # =========================
-      # EXECUÇÃO
+      # EXECUTAR W10UI (INPUT AUTO)
       # =========================
       - name: Rodar W10UI
         run: |
           cd /d D:\Files
-          call W10UI.cmd
+          for %%i in (*.iso) do set ISOFILE=%%i
+
+          (
+            echo 1
+            echo D:\Files\%ISOFILE%
+            echo 0
+          ) | W10UI.cmd
 
       # =========================
-      # VALIDAR ISO FINAL
+      # VALIDAR ISO FINAL REAL
       # =========================
-      - name: Verificar ISO gerada
+      - name: Detectar ISO final correta
         run: |
-          dir D:\Files\*.iso || exit /b 1
+          set FINALISO=
 
-      # =========================
-      # DETECTAR ISO FINAL
-      # =========================
-      - name: Detectar ISO final
-        run: |
-          for %%i in (D:\Files\*.iso) do set FINALISO=%%i
+          for %%i in (D:\Files\*.iso) do (
+              echo Encontrado: %%~nxi
+              echo %%~nxi | findstr /i "PROD 19044 KB" >nul && set FINALISO=%%i
+          )
+
+          if "%FINALISO%"=="" (
+              echo ERRO: ISO final nao encontrada
+              dir D:\Files\
+              exit /b 1
+          )
+
+          echo ISO FINAL: %FINALISO%
           echo FINALISO=%FINALISO% >> %GITHUB_ENV%
 
       # =========================
-      # COMPRESSÃO
+      # COMPRESSÃO FINAL
       # =========================
       - name: Compactar ISO
         run: |
-          7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z %FINALISO%
+          7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z "%FINALISO%"
 
       # =========================
-      # UPLOAD
+      # UPLOAD RELEASE
       # =========================
       - name: Upload Release
         uses: softprops/action-gh-release@v2
