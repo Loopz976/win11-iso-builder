@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (W10UI DEFINITIVO)
+name: Gerar ISO Windows 10 LTSC (W10UI FINAL REAL)
 
 on:
   workflow_dispatch:
@@ -26,7 +26,7 @@ jobs:
           mkdir D:\Files\Updates
 
       # =========================
-      # DOWNLOAD ISO (MULTIPART)
+      # DOWNLOAD ISO (3 PARTES)
       # =========================
       - name: Baixar ISO
         run: |
@@ -70,14 +70,14 @@ jobs:
               7z x "%%i" -oD:\Files\DVD -y
           )
 
-      - name: Validar estrutura Windows
+      - name: Validar estrutura
         run: |
           if not exist D:\Files\DVD\sources\install.wim (
             if not exist D:\Files\DVD\sources\install.esd exit /b 1
           )
 
       # =========================
-      # UPDATE
+      # UPDATE (REPO CORRETO)
       # =========================
       - name: Baixar Update
         run: |
@@ -102,7 +102,7 @@ jobs:
           7z x W10UI_10.59b.zip -oD:\Files -y
 
       # =========================
-      # CONFIG FINAL
+      # CONFIG CORRETA (CHAVE FINAL)
       # =========================
       - name: Criar W10UI.ini
         run: |
@@ -110,18 +110,20 @@ jobs:
           echo [W10UI]
           echo AutoStart=1
           echo Silent=1
+          echo Target=D:\Files\DVD
+          echo Repo=D:\Files\Updates
           echo AddUpdates=1
           echo Cleanup=1
           echo ResetBase=1
-          echo Drivers=1
           echo Rebuild=1
+          echo AddDrivers=1
           echo wim2esd=1
           echo esdcompress=4
           echo ISO=1
           ) > D:\Files\W10UI.ini
 
       # =========================
-      # EXECUÇÃO AUTOMÁTICA
+      # EXECUÇÃO
       # =========================
       - name: Rodar W10UI
         run: |
