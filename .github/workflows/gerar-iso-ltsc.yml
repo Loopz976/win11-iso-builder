@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (FINAL COMPLETO)
+name: Gerar ISO Windows 10 LTSC (FINAL MONTANDO ISO)
 
 on:
   workflow_dispatch:
@@ -34,60 +34,34 @@ jobs:
           curl -L -o D:\Files\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
           curl -L -o D:\Files\base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
-      - name: Validar partes
-        run: |
-          if not exist D:\Files\base.7z.001 exit /b 1
-          if not exist D:\Files\base.7z.002 exit /b 1
-          if not exist D:\Files\base.7z.003 exit /b 1
-
       - name: Testar 7z
         run: |
           7z t D:\Files\base.7z.001
 
-      - name: Extrair pacote base
+      - name: Extrair ISO
         run: |
           7z x D:\Files\base.7z.001 -oD:\Files\ISO -y
 
-      # =========================
-      # MOVER ISO
-      # =========================
       - name: Mover ISO
         run: |
           for /r D:\Files\ISO %%i in (*.iso) do (
               move "%%i" D:\Files\
           )
 
-      - name: Validar ISO base
+      - name: Validar ISO
         run: |
           dir D:\Files\*.iso || exit /b 1
 
       # =========================
-      # EXTRAIR ISO → DVD
+      # MONTAR ISO (CHAVE FINAL)
       # =========================
-      - name: Extrair ISO para DVD
+      - name: Montar ISO
+        shell: powershell
         run: |
-          mkdir D:\Files\DVD
-          for %%i in (D:\Files\*.iso) do (
-              7z x "%%i" -oD:\Files\DVD -y
-          )
-
-      # =========================
-      # CORRIGIR ESTRUTURA (SE TIVER PASTA EXTRA)
-      # =========================
-      - name: Corrigir estrutura DVD
-        run: |
-          for /d %%i in (D:\Files\DVD\*) do (
-              if exist "%%i\sources\install.wim" (
-                  echo Corrigindo estrutura...
-                  xcopy "%%i\*" D:\Files\DVD\ /E /H /C /I /Y
-              )
-          )
-
-      - name: Validar estrutura
-        run: |
-          if not exist D:\Files\DVD\sources\install.wim (
-            if not exist D:\Files\DVD\sources\install.esd exit /b 1
-          )
+          $iso = Get-ChildItem D:\Files\*.iso | Select-Object -First 1
+          Mount-DiskImage -ImagePath $iso.FullName
+          $drive = (Get-DiskImage $iso.FullName | Get-Volume).DriveLetter
+          echo "DRIVE=$drive" >> $env:GITHUB_ENV
 
       # =========================
       # UPDATE
@@ -97,7 +71,7 @@ jobs:
           curl -L -o D:\Files\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
-      # DRIVER NVIDIA
+      # DRIVER
       # =========================
       - name: Baixar Driver
         run: |
@@ -135,7 +109,7 @@ jobs:
           ) > D:\Files\W10UI.ini
 
       # =========================
-      # EXECUÇÃO (INPUT COMPLETO)
+      # EXECUÇÃO (USANDO DRIVE MONTADO)
       # =========================
       - name: Rodar W10UI
         run: |
@@ -143,10 +117,19 @@ jobs:
 
           (
             echo 1
-            echo D:\Files\DVD\
+            echo %DRIVE%:\
             echo 0
             echo 9
           ) | W10UI.cmd
+
+      # =========================
+      # DESMONTAR ISO
+      # =========================
+      - name: Desmontar ISO
+        shell: powershell
+        run: |
+          $iso = Get-ChildItem D:\Files\*.iso | Select-Object -First 1
+          Dismount-DiskImage -ImagePath $iso.FullName
 
       # =========================
       # DETECTAR ISO FINAL
@@ -156,11 +139,7 @@ jobs:
           set FINALISO=
           for %%i in (D:\Files\*19044*.iso) do set FINALISO=%%i
 
-          if "%FINALISO%"=="" (
-              echo ERRO: ISO final nao encontrada
-              dir D:\Files\
-              exit /b 1
-          )
+          if "%FINALISO%"=="" exit /b 1
 
           echo FINALISO=%FINALISO% >> %GITHUB_ENV%
 
