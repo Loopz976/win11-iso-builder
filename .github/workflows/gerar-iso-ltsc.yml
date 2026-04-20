@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC FINAL
+name: LTSC AUTO BUILD FINAL
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # =========================
-      # PREPARAR AMBIENTE
+      # PREPARAR
       # =========================
       - name: Preparar ambiente
         run: |
@@ -27,7 +27,7 @@ jobs:
           mkdir D:\Files\Drivers\OS
 
       # =========================
-      # BAIXAR ISO
+      # ISO BASE
       # =========================
       - name: Baixar ISO
         run: |
@@ -44,7 +44,7 @@ jobs:
           for /r D:\Files\ISO %%i in (*.iso) do move "%%i" D:\Files\
 
       # =========================
-      # EXTRAIR ISO COMPLETA
+      # EXTRAIR ISO COMPLETA (CRÍTICO)
       # =========================
       - name: Extrair ISO COMPLETA
         run: |
@@ -66,41 +66,42 @@ jobs:
       # =========================
       # UPDATE
       # =========================
-      - name: Baixar Update
+      - name: Baixar update
         run: |
           curl -L -o D:\Files\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
       # DRIVER
       # =========================
-      - name: Baixar Driver NVIDIA
+      - name: Baixar driver NVIDIA
         run: |
           curl -L -o D:\Files\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
 
-      - name: Extrair Driver
+      - name: Extrair driver
         run: |
           7z x D:\Files\nvidia.zip -oD:\Files\Drivers\OS -y
 
       # =========================
-      # BAIXAR W10UI ORIGINAL
+      # W10UI ORIGINAL
       # =========================
-      - name: Baixar W10UI original
+      - name: Baixar W10UI
         run: |
           curl -L -o D:\Files\w10ui.zip https://github.com/abbodi1406/BatUtil/archive/refs/heads/master.zip
 
-      - name: Extrair W10UI original
+      - name: Extrair W10UI
         run: |
           7z x D:\Files\w10ui.zip -oD:\Files -y
+          xcopy /E /I /Y D:\Files\BatUtil-master\W10UI\* D:\Files\
 
       # =========================
       # APLICAR CMD MODIFICADO
       # =========================
-      - name: Aplicar CMD modificado
+      - name: Aplicar W10UI modificado
         run: |
           7z x W10UI_modificado.zip -oD:\Files -y
 
       # =========================
-      # RODAR W10UI
+      # RODAR W10UI (AGORA SEM MENU)
       # =========================
       - name: Rodar W10UI
         run: |
