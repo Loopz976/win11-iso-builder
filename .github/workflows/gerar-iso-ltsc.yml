@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (FINAL DEFINITIVO)
+name: Gerar ISO Windows 10 LTSC (FINAL COMPLETO)
 
 on:
   workflow_dispatch:
@@ -26,7 +26,7 @@ jobs:
           mkdir D:\Files\Drivers\OS
 
       # =========================
-      # BAIXAR ISO (3 PARTES)
+      # BAIXAR ISO (MULTIPART)
       # =========================
       - name: Baixar ISO
         run: |
@@ -40,7 +40,7 @@ jobs:
           if not exist D:\Files\base.7z.002 exit /b 1
           if not exist D:\Files\base.7z.003 exit /b 1
 
-      - name: Testar integridade 7z
+      - name: Testar 7z
         run: |
           7z t D:\Files\base.7z.001
 
@@ -71,7 +71,19 @@ jobs:
               7z x "%%i" -oD:\Files\DVD -y
           )
 
-      - name: Validar estrutura DVD
+      # =========================
+      # CORRIGIR ESTRUTURA (SE TIVER PASTA EXTRA)
+      # =========================
+      - name: Corrigir estrutura DVD
+        run: |
+          for /d %%i in (D:\Files\DVD\*) do (
+              if exist "%%i\sources\install.wim" (
+                  echo Corrigindo estrutura...
+                  xcopy "%%i\*" D:\Files\DVD\ /E /H /C /I /Y
+              )
+          )
+
+      - name: Validar estrutura
         run: |
           if not exist D:\Files\DVD\sources\install.wim (
             if not exist D:\Files\DVD\sources\install.esd exit /b 1
@@ -123,7 +135,7 @@ jobs:
           ) > D:\Files\W10UI.ini
 
       # =========================
-      # EXECUTAR W10UI (TARGET CORRETO)
+      # EXECUÇÃO (INPUT COMPLETO)
       # =========================
       - name: Rodar W10UI
         run: |
@@ -131,20 +143,18 @@ jobs:
 
           (
             echo 1
-            echo D:\Files\DVD
+            echo D:\Files\DVD\
             echo 0
+            echo 9
           ) | W10UI.cmd
 
       # =========================
-      # VALIDAR ISO FINAL
+      # DETECTAR ISO FINAL
       # =========================
       - name: Detectar ISO final
         run: |
           set FINALISO=
-
-          for %%i in (D:\Files\*19044*.iso) do (
-              set FINALISO=%%i
-          )
+          for %%i in (D:\Files\*19044*.iso) do set FINALISO=%%i
 
           if "%FINALISO%"=="" (
               echo ERRO: ISO final nao encontrada
@@ -152,18 +162,17 @@ jobs:
               exit /b 1
           )
 
-          echo ISO FINAL: %FINALISO%
           echo FINALISO=%FINALISO% >> %GITHUB_ENV%
 
       # =========================
-      # COMPRESSÃO FINAL
+      # COMPRESSÃO
       # =========================
       - name: Compactar ISO
         run: |
           7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z "%FINALISO%"
 
       # =========================
-      # UPLOAD RELEASE
+      # UPLOAD
       # =========================
       - name: Upload Release
         uses: softprops/action-gh-release@v2
