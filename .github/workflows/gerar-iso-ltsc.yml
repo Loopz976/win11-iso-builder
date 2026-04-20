@@ -1,4 +1,4 @@
-name: Gerar ISO Windows 10 LTSC (W10UI FINAL CMD)
+name: Gerar ISO Windows 10 LTSC (W10UI CLEAN NO CACHE)
 
 on:
   workflow_dispatch:
@@ -15,26 +15,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Criar estrutura
+      - name: Criar estrutura limpa
         run: |
+          if exist D:\Files rmdir /s /q D:\Files
           mkdir D:\Files
           mkdir D:\Files\Drivers\OS
 
       # =========================
-      # CACHE ISO BASE
+      # DOWNLOAD ISO (3 PARTES)
       # =========================
-      - name: Cache ISO Base
-        id: cache-iso
-        uses: actions/cache@v4
-        with:
-          path: |
-            D:\Files\base.7z.001
-            D:\Files\base.7z.002
-            D:\Files\base.7z.003
-          key: iso-base-v3
-
       - name: Baixar ISO completa
-        if: steps.cache-iso.outputs.cache-hit != 'true'
         run: |
           curl -L -o D:\Files\base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
           curl -L -o D:\Files\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
@@ -54,9 +44,16 @@ jobs:
         run: |
           7z x D:\Files\base.7z.001 -oD:\Files\ISO -y
 
-      - name: Mover ISO
+      - name: Mover ISO (blindado)
         run: |
-          move D:\Files\ISO\*.iso D:\Files\
+          del /f /q D:\Files\*.iso >nul 2>&1
+          for /r D:\Files\ISO %%i in (*.iso) do (
+              move "%%i" D:\Files\
+          )
+
+      - name: Validar ISO extraída
+        run: |
+          dir D:\Files\*.iso || exit /b 1
 
       # =========================
       # UPDATE
@@ -68,15 +65,7 @@ jobs:
       # =========================
       # DRIVER NVIDIA
       # =========================
-      - name: Cache Driver
-        id: cache-driver
-        uses: actions/cache@v4
-        with:
-          path: D:\Files\nvidia.zip
-          key: nvidia-driver-v1
-
-      - name: Baixar Driver
-        if: steps.cache-driver.outputs.cache-hit != 'true'
+      - name: Baixar Driver NVIDIA
         run: |
           curl -L -o D:\Files\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
 
@@ -87,20 +76,12 @@ jobs:
       # =========================
       # W10UI
       # =========================
-      - name: Cache W10UI
-        id: cache-w10ui
-        uses: actions/cache@v4
-        with:
-          path: D:\Files\W10UI.cmd
-          key: w10ui-v1
-
       - name: Extrair W10UI
-        if: steps.cache-w10ui.outputs.cache-hit != 'true'
         run: |
           7z x W10UI_10.59b.zip -oD:\Files -y
 
       # =========================
-      # CONFIG W10UI
+      # CONFIG
       # =========================
       - name: Criar W10UI.ini
         run: |
@@ -128,19 +109,19 @@ jobs:
       # =========================
       # DETECTAR ISO FINAL
       # =========================
-      - name: Detectar ISO
+      - name: Detectar ISO final
         run: |
           for %%i in (D:\Files\*.iso) do set FINALISO=%%i
           echo FINALISO=%FINALISO% >> %GITHUB_ENV%
 
-      - name: Validar ISO
+      - name: Validar ISO final
         run: |
           if not exist %FINALISO% exit /b 1
 
       # =========================
       # COMPRESSÃO FINAL
       # =========================
-      - name: Compactar ISO
+      - name: Compactar ISO 1900MB
         run: |
           7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z %FINALISO%
 
