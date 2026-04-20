@@ -28,7 +28,7 @@ jobs:
           mkdir D:\Files\Drivers\OS
 
       # =========================
-      # BAIXAR ISO BASE
+      # BAIXAR ISO BASE (3 PARTES)
       # =========================
       - name: Baixar ISO
         run: |
@@ -71,7 +71,7 @@ jobs:
       # =========================
       # DRIVER NVIDIA
       # =========================
-      - name: Baixar Driver
+      - name: Baixar Driver NVIDIA
         run: |
           curl -L -o D:\Files\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
 
@@ -82,12 +82,12 @@ jobs:
       # =========================
       # W10UI ORIGINAL
       # =========================
-      - name: Extrair W10UI original
+      - name: Extrair W10UI
         run: |
           7z x W10UI_10.59b.zip -oD:\Files -y
 
       # =========================
-      # SUBSTITUIR INI
+      # APLICAR INI CORRETO (SEM ZIP)
       # =========================
       - name: Remover ini original
         run: |
@@ -95,14 +95,10 @@ jobs:
 
       - name: Baixar INI correto
         run: |
-          curl -L -o D:\Files\ini.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/ini/W10UI_ini_ajustado.zip
-
-      - name: Aplicar INI correto
-        run: |
-          7z x D:\Files\ini.zip -oD:\Files -y
+          curl -L -o D:\Files\W10UI.ini https://raw.githubusercontent.com/Loopz976/ltsc-auto-builder/main/W10UI.ini
 
       # =========================
-      # EXECUTAR W10UI
+      # RODAR W10UI
       # =========================
       - name: Rodar W10UI
         run: |
@@ -126,14 +122,14 @@ jobs:
           echo FINALISO=%FINALISO% >> %GITHUB_ENV%
 
       # =========================
-      # COMPACTAR
+      # COMPACTAR EM 1900MB
       # =========================
       - name: Compactar ISO
         run: |
           7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z "%FINALISO%"
 
       # =========================
-      # UPLOAD
+      # UPLOAD RELEASE
       # =========================
       - name: Upload Release
         uses: softprops/action-gh-release@v2
