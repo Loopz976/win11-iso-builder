@@ -1,4 +1,4 @@
-name: Build Windows ISO
+name: Build Windows ISO v2
 
 on:
   workflow_dispatch:
@@ -11,37 +11,31 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Install 7zip
-      run: choco install 7zip -y
+    - name: Install tools
+      run: |
+        choco install 7zip -y
+        choco install aria2 -y
 
     # =========================
-    # DOWNLOAD ISO (BITS - ESTÁVEL)
+    # DOWNLOAD ISO (ARIA2 TURBO)
     # =========================
-    - name: Download ISO Parts
-      shell: powershell
+    - name: Download ISO Parts (ARIA2)
+      shell: cmd
       run: |
         mkdir ISO
         cd ISO
 
-        function Download($url, $out) {
-          Write-Host "Baixando $out..."
-          Start-BitsTransfer -Source $url -Destination $out
+        aria2c -x 16 -s 16 -k 1M --retry-wait=5 --max-tries=10 ^
+        -o part1.7z.001 ^
+        https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
 
-          if (!(Test-Path $out)) {
-            throw "Falha download $out"
-          }
+        aria2c -x 16 -s 16 -k 1M --retry-wait=5 --max-tries=10 ^
+        -o part1.7z.002 ^
+        https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
 
-          $size = (Get-Item $out).Length
-          if ($size -lt 500MB) {
-            throw "Arquivo incompleto: $out"
-          }
-
-          Write-Host "$out OK"
-        }
-
-        Download "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001" "part1.7z.001"
-        Download "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002" "part1.7z.002"
-        Download "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003" "part1.7z.003"
+        aria2c -x 16 -s 16 -k 1M --retry-wait=5 --max-tries=10 ^
+        -o part1.7z.003 ^
+        https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
 
     # =========================
     # EXTRAIR ISO
@@ -56,9 +50,10 @@ jobs:
     # DOWNLOAD PROJETO NTLITE
     # =========================
     - name: Download ProjetoNTLite
-      shell: powershell
+      shell: cmd
       run: |
-        Invoke-WebRequest "https://github.com/Loopz976/ltsc-auto-builder/releases/download/projetontlite/ProjetoNTlite.zip" -OutFile ProjetoNTLite.zip
+        aria2c -x 8 -s 8 -o ProjetoNTLite.zip ^
+        https://github.com/Loopz976/ltsc-auto-builder/releases/download/projetontlite/ProjetoNTlite.zip
 
     - name: Extract ProjetoNTLite
       run: 7z x ProjetoNTLite.zip -oProjetoNTLite -y
@@ -66,15 +61,11 @@ jobs:
     # =========================
     # DETECTAR + CORRIGIR XML
     # =========================
-    - name: Detect and Fix XML
+    - name: Fix XML
       shell: powershell
       run: |
         $xml = Get-ChildItem -Recurse -Filter *.xml | Select-Object -First 1
-
         if (!$xml) { throw "XML não encontrado" }
-
-        Write-Host "Preset encontrado:"
-        Write-Host $xml.FullName
 
         (Get-Content $xml.FullName) `
           -replace 'C:\\ProjetoNTlite\\', '' `
@@ -90,22 +81,16 @@ jobs:
       shell: powershell
       run: |
         $exe = "ProjetoNTLite\NTLite\NTLite.exe"
-
-        if (!(Test-Path $exe)) {
-          throw "NTLite não encontrado"
-        }
-
-        Write-Host "Rodando NTLite..."
+        if (!(Test-Path $exe)) { throw "NTLite não encontrado" }
 
         Start-Process $exe `
           -ArgumentList "/silent /load:`"$env:XML_PATH`" /apply /exit /log:ntlite.log" `
           -Wait
 
         if (Test-Path "ntlite.log") {
-          Write-Host "===== LOG ====="
           Get-Content ntlite.log -Tail 200
         } else {
-          throw "NTLite falhou (sem log)"
+          throw "NTLite falhou"
         }
 
     # =========================
@@ -131,7 +116,7 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: build-${{ github.run_number }}
-        name: Win10 LTSC Custom Build
+        name: Win10 LTSC Custom
         files: FINAL\*.7z*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
