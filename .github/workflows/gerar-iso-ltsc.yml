@@ -27,7 +27,7 @@ jobs:
         mkdir D:\W10UI\Drivers
 
     # ================================
-    # EXTRAIR W10UI
+    # EXTRAIR W10UI (CORRETO)
     # ================================
     - name: Extrair W10UI
       run: |
@@ -36,7 +36,7 @@ jobs:
         rmdir /s /q D:\W10UI\tmp
 
     # ================================
-    # BAIXAR ISO BASE (SEU LINK)
+    # BAIXAR ISO (SEUS LINKS)
     # ================================
     - name: Baixar ISO
       run: |
