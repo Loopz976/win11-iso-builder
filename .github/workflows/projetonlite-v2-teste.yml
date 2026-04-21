@@ -1,4 +1,4 @@
-name: Build Windows ISO v2
+name: Build Windows ISO
 
 on:
   workflow_dispatch:
@@ -15,25 +15,28 @@ jobs:
       run: choco install 7zip -y
 
     # =========================
-    # DOWNLOAD ISO (ROBUSTO)
+    # DOWNLOAD ISO (BITS - ESTÁVEL)
     # =========================
-    - name: Download ISO Parts (Stable)
+    - name: Download ISO Parts
       shell: powershell
       run: |
         mkdir ISO
         cd ISO
 
         function Download($url, $out) {
-          $retry = 3
-          for ($i=1; $i -le $retry; $i++) {
-            try {
-              Write-Host "Baixando $out tentativa $i..."
-              Invoke-WebRequest $url -OutFile $out
-              if ((Get-Item $out).Length -gt 100MB) { return }
-            } catch {}
-            Start-Sleep 5
+          Write-Host "Baixando $out..."
+          Start-BitsTransfer -Source $url -Destination $out
+
+          if (!(Test-Path $out)) {
+            throw "Falha download $out"
           }
-          throw "Falha download $out"
+
+          $size = (Get-Item $out).Length
+          if ($size -lt 500MB) {
+            throw "Arquivo incompleto: $out"
+          }
+
+          Write-Host "$out OK"
         }
 
         Download "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001" "part1.7z.001"
@@ -61,16 +64,17 @@ jobs:
       run: 7z x ProjetoNTLite.zip -oProjetoNTLite -y
 
     # =========================
-    # DETECTAR E CORRIGIR XML
+    # DETECTAR + CORRIGIR XML
     # =========================
-    - name: Detect & Fix XML
+    - name: Detect and Fix XML
       shell: powershell
       run: |
         $xml = Get-ChildItem -Recurse -Filter *.xml | Select-Object -First 1
 
         if (!$xml) { throw "XML não encontrado" }
 
-        Write-Host "Preset:" $xml.FullName
+        Write-Host "Preset encontrado:"
+        Write-Host $xml.FullName
 
         (Get-Content $xml.FullName) `
           -replace 'C:\\ProjetoNTlite\\', '' `
@@ -87,16 +91,18 @@ jobs:
       run: |
         $exe = "ProjetoNTLite\NTLite\NTLite.exe"
 
-        if (!(Test-Path $exe)) { throw "NTLite não encontrado" }
+        if (!(Test-Path $exe)) {
+          throw "NTLite não encontrado"
+        }
 
-        Write-Host "Rodando preset..."
+        Write-Host "Rodando NTLite..."
 
         Start-Process $exe `
           -ArgumentList "/silent /load:`"$env:XML_PATH`" /apply /exit /log:ntlite.log" `
           -Wait
 
         if (Test-Path "ntlite.log") {
-          Write-Host "==== LOG ===="
+          Write-Host "===== LOG ====="
           Get-Content ntlite.log -Tail 200
         } else {
           throw "NTLite falhou (sem log)"
@@ -125,7 +131,7 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: build-${{ github.run_number }}
-        name: Win10 LTSC Custom
+        name: Win10 LTSC Custom Build
         files: FINAL\*.7z*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
