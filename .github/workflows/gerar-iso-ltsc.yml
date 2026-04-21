@@ -1,4 +1,4 @@
-name: LTSC W10UI DEBUG BUILD
+name: LTSC W10UI FULL AUTO
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # =========================
-      # PREPARAR AMBIENTE
+      # PREPARAR
       # =========================
       - name: Preparar ambiente
         run: |
@@ -28,136 +28,84 @@ jobs:
           mkdir D:\W10UI\Updates
 
       # =========================
-      # EXTRAIR W10UI
+      # W10UI
       # =========================
       - name: Extrair W10UI
         run: |
-          echo ==== REPO ROOT ====
-          echo %CD%
-          dir
-
           copy "%CD%\W10UI_10.59b.zip" D:\W10UI\w10ui.zip
           7z x D:\W10UI\w10ui.zip -oD:\W10UI -y
 
-          echo ==== W10UI ROOT ====
-          dir D:\W10UI
-
       # =========================
-      # BAIXAR ISO
+      # ISO
       # =========================
       - name: Baixar ISO
         run: |
-          curl -L -o D:\W10UI\base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
-          curl -L -o D:\W10UI\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
-          curl -L -o D:\W10UI\base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
+          curl -L -o D:\W10UI\base.iso "LINK_ISO"
 
       - name: Extrair ISO
         run: |
-          7z x D:\W10UI\base.7z.001 -oD:\W10UI -y
+          7z x D:\W10UI\base.iso -oD:\W10UI\DVD -y
 
-      - name: Extrair estrutura ISO
+      - name: Preparar WIM
         run: |
-          for %%i in (D:\W10UI\*.iso) do (
-            echo Extraindo %%i
-            7z x "%%i" -oD:\W10UI\DVD -y
-          )
-
-      # =========================
-      # PREPARAR WIM
-      # =========================
-      - name: Preparar install.wim
-        run: |
-          if not exist D:\W10UI\DVD\sources\install.wim (
-            echo ERRO: install.wim nao encontrado
-            exit /b 1
-          )
           copy D:\W10UI\DVD\sources\install.wim D:\W10UI\install.wim
 
       # =========================
       # UPDATE
       # =========================
-      - name: Baixar update
+      - name: Update
         run: |
-          curl -L -o D:\W10UI\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
+          curl -L -o D:\W10UI\Updates\update.msu "LINK_MSU"
 
       # =========================
       # DRIVER
       # =========================
-      - name: Baixar driver
+      - name: Drivers
         run: |
-          curl -L -o D:\W10UI\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
-          7z x D:\W10UI\nvidia.zip -oD:\W10UI\Drivers -y
+          curl -L -o D:\W10UI\drv.zip "LINK_DRIVER"
+          7z x D:\W10UI\drv.zip -oD:\W10UI\Drivers -y
 
       # =========================
-      # CRIAR INI CORRETO
+      # EXECUÇÃO FULL (SEM INI EXTERNO)
       # =========================
-      - name: Criar W10UI.ini
-        run: |
-          > D:\W10UI\W10UI.ini (
-          echo [W10UI]
-          echo Target=D:\W10UI\install.wim
-          echo Repo=D:\W10UI
-          echo AutoStart=1
-          echo Silent=1
-          echo AddUpdates=1
-          echo AddDrivers=1
-          echo Drv_Source=D:\W10UI\Drivers
-          echo Net35=1
-          echo Cleanup=1
-          echo ResetBase=1
-          echo Rebuild=1
-          echo ISO=1
-          echo ISODir=D:\W10UI\ISO
-          echo MountDir=D:\W10UI\MOUNT
-          echo _CabDir=D:\W10UI\CAB
-          echo wim2esd=1
-          echo ESDCompress=LZMS
-          )
-
-      # =========================
-      # DEBUG CRÍTICO
-      # =========================
-      - name: Debug geral
-        run: |
-          echo ===== ESTRUTURA =====
-          dir D:\W10UI
-          echo ===== UPDATES =====
-          dir D:\W10UI\Updates
-          echo ===== DRIVERS =====
-          dir D:\W10UI\Drivers
-          echo ===== INI =====
-          type D:\W10UI\W10UI.ini
-
-      # =========================
-      # EXECUÇÃO FORÇADA
-      # =========================
-      - name: Executar W10UI
+      - name: Rodar W10UI FULL
         run: |
           cd /d D:\W10UI
 
-          echo ==== VARIAVEIS ====
-          set _work=1
-          set _act=1
-          set AutoStart=1
+          echo ==== FORCE CONFIG ====
 
-          echo ==== START ====
+          set "_target=D:\W10UI\install.wim"
+          set "_repo=D:\W10UI"
+          set "_drv=D:\W10UI\Drivers"
+
+          set "AddUpdates=1"
+          set "AddDrivers=1"
+          set "Cleanup=1"
+          set "ResetBase=1"
+          set "Rebuild=1"
+          set "Net35=1"
+
+          set "wim2esd=1"
+          set "ESDCompress=LZMS"
+
+          set "ISO=1"
+          set "ISODir=D:\W10UI\ISO"
+          set "MountDir=D:\W10UI\MOUNT"
+          set "_CabDir=D:\W10UI\CAB"
+
+          set "_work=1"
+          set "_act=1"
+          set "AutoStart=1"
+
           call W10UI.cmd
 
       # =========================
-      # CAPTURAR ISO
+      # DETECTAR ISO
       # =========================
-      - name: Detectar ISO final
+      - name: Detectar ISO
         run: |
-          dir D:\W10UI\ISO
           for %%i in (D:\W10UI\ISO\*.iso) do set FINAL=%%i
           echo FINAL=%FINAL%>>%GITHUB_ENV%
-
-      # =========================
-      # COMPACTAR
-      # =========================
-      - name: Compactar
-        run: |
-          7z a -t7z -mx=9 -v1900m D:\W10UI\FINAL.7z "%FINAL%"
 
       # =========================
       # UPLOAD
@@ -165,8 +113,7 @@ jobs:
       - name: Upload
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: debug-${{ github.run_number }}
-          name: LTSC DEBUG BUILD
-          files: D:\W10UI\FINAL.7z*
+          tag_name: build-${{ github.run_number }}
+          files: ${{ env.FINAL }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}artifacts 
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
