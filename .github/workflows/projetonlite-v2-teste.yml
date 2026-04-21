@@ -15,12 +15,14 @@ jobs:
       run: choco install 7zip -y
 
     # =========================
-    # BAIXAR ISO (3 PARTES)
+    # BAIXAR ISO BASE
     # =========================
     - name: Download ISO Parts
+      shell: powershell
       run: |
         mkdir ISO
         cd ISO
+
         curl -L -o part1.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
         curl -L -o part1.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
         curl -L -o part1.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
@@ -35,20 +37,20 @@ jobs:
         7z x part1.7z.001 -oISO_EXTRACTED -y
 
     # =========================
-    # BAIXAR PROJETO NTLITE
+    # BAIXAR NTLITE
     # =========================
     - name: Download ProjetoNTLite
+      shell: powershell
       run: |
         curl -L -o ProjetoNTLite.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/projetontlite/ProjetoNTlite.zip
 
     - name: Extract ProjetoNTLite
-      run: |
-        7z x ProjetoNTLite.zip -oProjetoNTLite -y
+      run: 7z x ProjetoNTLite.zip -oProjetoNTLite -y
 
     # =========================
-    # DETECTAR XML AUTOMATICO
+    # FIX AUTOMÁTICO XML
     # =========================
-    - name: Detect XML
+    - name: Fix XML (paths + detect)
       shell: powershell
       run: |
         $xml = Get-ChildItem -Recurse -Filter *.xml | Select-Object -First 1
@@ -58,99 +60,61 @@ jobs:
           exit 1
         }
 
-        echo "XML_PATH=$($xml.FullName)" >> $env:GITHUB_ENV
-        Write-Host "XML encontrado:"
-        Write-Host $xml.FullName
+        Write-Host "XML encontrado:" $xml.FullName
+
+        (Get-Content $xml.FullName) `
+          -replace 'C:\\ProjetoNTlite\\', '' `
+          -replace 'D:\\NTLite\.iso', 'output.iso' |
+          Set-Content $xml.FullName
+
+        Write-Host "XML corrigido com sucesso"
 
     # =========================
-    # CORRIGIR CAMINHOS XML
+    # RODAR NTLITE + LOG REALTIME
     # =========================
-    - name: Fix XML Paths
-      shell: powershell
-      run: |
-        $xml = "$env:XML_PATH"
-        $content = Get-Content $xml -Raw
-
-        $content = $content -replace "C:\\ProjetoNTlite\\", ""
-        $content = $content -replace "D:\\NTLite.iso", "NTLite.iso"
-
-        Set-Content $xml $content -Encoding UTF8
-
-        Write-Host "XML corrigido"
-
-    # =========================
-    # RODAR NTLITE + LOG AO VIVO
-    # =========================
-    - name: Run NTLite (LIVE LOG)
+    - name: Run NTLite (REALTIME LOG)
       shell: powershell
       run: |
         $exe = "ProjetoNTLite\NTLite\NTLite.exe"
-        $xml = "$env:XML_PATH"
-        $log = "ntlite.log"
+        $xml = Get-ChildItem -Recurse -Filter *.xml | Select-Object -First 1
 
-        if (!(Test-Path $exe)) {
+        if (-not (Test-Path $exe)) {
           Write-Error "NTLite não encontrado"
           exit 1
         }
 
-        Write-Host "Iniciando NTLite..."
+        Write-Host "Usando preset:" $xml.FullName
 
-        $proc = Start-Process $exe `
-          -ArgumentList "/silent","/preset:$xml","/apply","/exit","/log:$log" `
-          -PassThru
+        Start-Process $exe `
+          -ArgumentList "/silent /load:`"$($xml.FullName)`" /apply /exit" `
+          -PassThru | Tee-Object -Variable proc
 
-        # 🔥 ESPERA LOG CRIAR
-        while (!(Test-Path $log)) {
-          Write-Host "Aguardando NTLite iniciar..."
-          Start-Sleep -Seconds 2
+        # Aguarda processo iniciar de verdade
+        Start-Sleep -Seconds 10
+
+        # Loop acompanhando execução
+        while (-not $proc.HasExited) {
+          Write-Host "NTLite ainda rodando..."
+          Start-Sleep -Seconds 20
         }
 
-        Write-Host "===== NTLITE LOG AO VIVO ====="
-
-        $lastSize = 0
-
-        # 🔥 STREAM REAL
-        while (!$proc.HasExited) {
-
-          $content = Get-Content $log -Raw
-
-          if ($content.Length -gt $lastSize) {
-            $new = $content.Substring($lastSize)
-            Write-Output $new
-            $lastSize = $content.Length
-          }
-
-          Start-Sleep -Seconds 3
-        }
-
-        Write-Host "===== FINAL ====="
-        Get-Content $log -Tail 50
-
-        if ($proc.ExitCode -ne 0) {
-          Write-Error "NTLite falhou"
-          exit 1
-        }
+        Write-Host "NTLite finalizado!"
 
     # =========================
-    # CRIAR ISO FINAL
+    # CRIAR ISO
     # =========================
     - name: Create ISO
       shell: cmd
       run: |
         mkdir FINAL
-
-        oscdimg ^
-        -bootdata:2#p0,e,bISO\ISO_EXTRACTED\boot\etfsboot.com#pEF,e,bISO\ISO_EXTRACTED\efi\microsoft\boot\efisys.bin ^
-        -u2 -h -m -o ^
-        -lWIN10_CUSTOM ^
-        ISO\ISO_EXTRACTED FINAL\Win10LTSC_21.04.2026_ntlite_actions.iso
+        oscdimg -bISO\ISO_EXTRACTED\boot\etfsboot.com -u2 -h -m -o -lWIN10_CUSTOM ISO\ISO_EXTRACTED FINAL\Win10_CUSTOM.iso
 
     # =========================
     # SPLIT ISO
     # =========================
     - name: Split ISO
       run: |
-        7z a -v1900m FINAL\Win10LTSC_21.04.2026_ntlite_actions.7z FINAL\Win10LTSC_21.04.2026_ntlite_actions.iso
+        7z a -v1900m FINAL\Win10_CUSTOM.7z FINAL\Win10_CUSTOM.iso
 
     # =========================
     # UPLOAD RELEASE
@@ -159,7 +123,7 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: build-${{ github.run_number }}
-        name: Win10LTSC 21.04.2026 ntlite actions
+        name: Win10 Custom Build
         files: FINAL\*.7z*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
