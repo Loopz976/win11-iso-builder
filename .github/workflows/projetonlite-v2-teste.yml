@@ -1,4 +1,4 @@
-name: Build Windows ISO
+name: Build Windows ISO v2
 
 on:
   workflow_dispatch:
@@ -15,16 +15,30 @@ jobs:
       run: choco install 7zip -y
 
     # =========================
-    # BAIXAR ISO (3 PARTES)
+    # DOWNLOAD ISO (ROBUSTO)
     # =========================
-    - name: Download ISO Parts
+    - name: Download ISO Parts (Stable)
       shell: powershell
       run: |
         mkdir ISO
         cd ISO
-        curl -L -o part1.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
-        curl -L -o part1.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
-        curl -L -o part1.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
+
+        function Download($url, $out) {
+          $retry = 3
+          for ($i=1; $i -le $retry; $i++) {
+            try {
+              Write-Host "Baixando $out tentativa $i..."
+              Invoke-WebRequest $url -OutFile $out
+              if ((Get-Item $out).Length -gt 100MB) { return }
+            } catch {}
+            Start-Sleep 5
+          }
+          throw "Falha download $out"
+        }
+
+        Download "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001" "part1.7z.001"
+        Download "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002" "part1.7z.002"
+        Download "https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003" "part1.7z.003"
 
     # =========================
     # EXTRAIR ISO
@@ -36,66 +50,56 @@ jobs:
         7z x part1.7z.001 -oISO_EXTRACTED -y
 
     # =========================
-    # BAIXAR PROJETO NTLITE
+    # DOWNLOAD PROJETO NTLITE
     # =========================
     - name: Download ProjetoNTLite
       shell: powershell
       run: |
-        curl -L -o ProjetoNTLite.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/projetontlite/ProjetoNTlite.zip
+        Invoke-WebRequest "https://github.com/Loopz976/ltsc-auto-builder/releases/download/projetontlite/ProjetoNTlite.zip" -OutFile ProjetoNTLite.zip
 
     - name: Extract ProjetoNTLite
       run: 7z x ProjetoNTLite.zip -oProjetoNTLite -y
 
     # =========================
-    # DETECTAR + CORRIGIR XML
+    # DETECTAR E CORRIGIR XML
     # =========================
-    - name: Detect and Fix XML
+    - name: Detect & Fix XML
       shell: powershell
       run: |
         $xml = Get-ChildItem -Recurse -Filter *.xml | Select-Object -First 1
 
-        if (-not $xml) {
-          Write-Error "Nenhum XML encontrado!"
-          exit 1
-        }
+        if (!$xml) { throw "XML não encontrado" }
 
-        Write-Host "XML encontrado:" $xml.FullName
+        Write-Host "Preset:" $xml.FullName
 
-        # Corrige caminhos quebrados
         (Get-Content $xml.FullName) `
           -replace 'C:\\ProjetoNTlite\\', '' `
           -replace 'D:\\.*?\.iso', 'output.iso' |
           Set-Content $xml.FullName
 
-        echo "XML corrigido"
-
-        # Salva caminho para próximos steps
         echo "XML_PATH=$($xml.FullName)" >> $env:GITHUB_ENV
 
     # =========================
-    # RODAR NTLITE (FIX REAL)
+    # RODAR NTLITE
     # =========================
-    - name: Run NTLite (Silent + Log)
+    - name: Run NTLite
       shell: powershell
       run: |
         $exe = "ProjetoNTLite\NTLite\NTLite.exe"
 
-        if (-not (Test-Path $exe)) {
-          Write-Error "NTLite não encontrado!"
-          exit 1
-        }
+        if (!(Test-Path $exe)) { throw "NTLite não encontrado" }
 
-        Write-Host "Rodando com preset:" $env:XML_PATH
+        Write-Host "Rodando preset..."
 
         Start-Process $exe `
           -ArgumentList "/silent /load:`"$env:XML_PATH`" /apply /exit /log:ntlite.log" `
           -Wait
 
-        echo "==== LOG NTLITE ===="
         if (Test-Path "ntlite.log") {
+          Write-Host "==== LOG ===="
           Get-Content ntlite.log -Tail 200
         } else {
-          echo "Log não encontrado"
+          throw "NTLite falhou (sem log)"
         }
 
     # =========================
@@ -121,7 +125,7 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: build-${{ github.run_number }}
-        name: Win10 LTSC Custom Build
+        name: Win10 LTSC Custom
         files: FINAL\*.7z*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
