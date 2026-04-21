@@ -1,0 +1,90 @@
+name: Build Windows ISO
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # 📦 Baixar partes da ISO (ajusta URLs se precisar)
+    - name: Download ISO Parts
+      shell: powershell
+      run: |
+        mkdir ISO
+        cd ISO
+
+        # EXEMPLO (troca pelos teus links reais)
+        curl -L -o part1.7z.001 "LINK_DA_PARTE_1"
+        curl -L -o part1.7z.002 "LINK_DA_PARTE_2"
+
+    # 🧩 Extrair ISO (7zip junta automático)
+    - name: Extract ISO
+      shell: powershell
+      run: |
+        cd ISO
+        7z x part1.7z.001 -oISO_EXTRACTED -y
+
+    # 📥 Baixar projeto NTLite
+    - name: Download ProjetoNTLite
+      shell: powershell
+      run: |
+        curl -L -o ProjetoNTLite.zip "LINK_DO_SEU_ZIP"
+
+    - name: Extract ProjetoNTLite
+      shell: powershell
+      run: |
+        7z x ProjetoNTLite.zip -oProjetoNTLite -y
+
+    # 🔥 RODAR NTLITE + LOG AO VIVO
+    - name: Run NTLite (Live Log)
+      shell: powershell
+      run: |
+        $exe = "ProjetoNTLite\NTLite\NTLite.exe"
+
+        # inicia processo
+        $process = Start-Process $exe `
+          -ArgumentList "/silent","/log:ntlite.log" `
+          -PassThru
+
+        Write-Host "NTLite iniciado..."
+
+        # espera log aparecer
+        while (!(Test-Path "ntlite.log")) {
+          Start-Sleep -Seconds 5
+        }
+
+        Write-Host "Mostrando log em tempo real..."
+        
+        # mostra log ao vivo
+        Get-Content "ntlite.log" -Wait
+
+        # espera finalizar
+        $process.WaitForExit()
+
+        if ($process.ExitCode -ne 0) {
+          Write-Error "NTLite falhou"
+          exit 1
+        }
+
+    # 📀 Criar ISO (caso preset não faça sozinho)
+    - name: Create ISO
+      shell: powershell
+      run: |
+        if (Test-Path "ISO\ISO_EXTRACTED") {
+          oscdimg -bISO\ISO_EXTRACTED\boot\etfsboot.com `
+          -u2 -h -m -o `
+          ISO\ISO_EXTRACTED `
+          Custom.iso
+        }
+
+    # 📤 Upload Release
+    - name: Upload Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: build-${{ github.run_number }}
+        files: Custom.iso
