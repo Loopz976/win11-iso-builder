@@ -1,4 +1,4 @@
-name: Build ISO NTLite v2
+name: Build Windows ISO v2
 
 on:
   workflow_dispatch:
@@ -11,37 +11,50 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    # 🔽 Extrair seu projeto base (se tiver zipado)
+    - name: Install 7zip
+      run: choco install 7zip -y
+
+    # =========================
+    # BAIXAR ISO (3 PARTES)
+    # =========================
+    - name: Download ISO Parts
+      run: |
+        mkdir ISO
+        cd ISO
+        curl -L -o part1.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
+        curl -L -o part1.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
+        curl -L -o part1.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
+
+    # =========================
+    # EXTRAIR ISO
+    # =========================
+    - name: Extract ISO
+      shell: cmd
+      run: |
+        cd ISO
+        7z x part1.7z.001 -oISO_EXTRACTED -y
+
+    # =========================
+    # BAIXAR PROJETO NTLITE
+    # =========================
+    - name: Download ProjetoNTLite
+      run: |
+        curl -L -o ProjetoNTLite.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/projetontlite/ProjetoNTlite.zip
+
     - name: Extract ProjetoNTLite
       run: |
-        if (Test-Path "ProjetoNTLite.zip") {
-          7z x ProjetoNTLite.zip -oProjetoNTLite -y
-        }
+        7z x ProjetoNTLite.zip -oProjetoNTLite -y
 
-    # 🔽 Extrair preset
-    - name: Extract Preset
-      run: |
-        if (Test-Path "Preset.zip") {
-          7z x Preset.zip -oProjetoNTLite -y
-        } else {
-          Write-Error "Preset.zip não encontrado"
-          exit 1
-        }
-
-    # 🔍 DEBUG (ver estrutura real)
-    - name: List Files (DEBUG)
-      run: |
-        Get-ChildItem -Recurse
-
-    # 🔥 DETECTAR XML AUTOMATICAMENTE
-    - name: Detect XML Preset
-      id: detect_xml
+    # =========================
+    # DETECTAR XML AUTOMATICO
+    # =========================
+    - name: Detect XML
       shell: powershell
       run: |
         $xml = Get-ChildItem -Recurse -Filter *.xml | Select-Object -First 1
 
         if (-not $xml) {
-          Write-Error "Nenhum XML encontrado"
+          Write-Error "XML não encontrado"
           exit 1
         }
 
@@ -49,56 +62,104 @@ jobs:
         Write-Host "XML encontrado:"
         Write-Host $xml.FullName
 
-    # 🔧 CORRIGIR CAMINHOS DO XML
+    # =========================
+    # CORRIGIR CAMINHOS XML
+    # =========================
     - name: Fix XML Paths
       shell: powershell
       run: |
-        $xmlPath = "$env:XML_PATH"
+        $xml = "$env:XML_PATH"
+        $content = Get-Content $xml -Raw
 
-        Write-Host "Corrigindo XML em:"
-        Write-Host $xmlPath
-
-        $content = Get-Content $xmlPath -Raw
-
-        # Remove caminhos inválidos do seu PC
         $content = $content -replace "C:\\ProjetoNTlite\\", ""
         $content = $content -replace "D:\\NTLite.iso", "NTLite.iso"
 
-        Set-Content $xmlPath $content -Encoding UTF8
+        Set-Content $xml $content -Encoding UTF8
 
-    # 🔽 Baixar NTLite
-    - name: Download NTLite
-      run: |
-        Invoke-WebRequest -Uri "https://www.ntlite.com/files/NTLite_setup_x64.exe" -OutFile ntlite.exe
+        Write-Host "XML corrigido"
 
-    - name: Install NTLite
-      run: |
-        Start-Process .\ntlite.exe -ArgumentList "/S" -Wait
-
-    # 🔥 RODAR NTLITE
-    - name: Run NTLite
+    # =========================
+    # RODAR NTLITE + LOG AO VIVO
+    # =========================
+    - name: Run NTLite (LIVE LOG)
       shell: powershell
       run: |
-        $ntlite = "C:\Program Files\NTLite\NTLite.exe"
+        $exe = "ProjetoNTLite\NTLite\NTLite.exe"
         $xml = "$env:XML_PATH"
+        $log = "ntlite.log"
 
-        if (!(Test-Path $ntlite)) {
+        if (!(Test-Path $exe)) {
           Write-Error "NTLite não encontrado"
           exit 1
         }
 
-        Write-Host "Executando NTLite..."
-        Start-Process $ntlite -ArgumentList "/silent","/preset:$xml" -Wait
+        Write-Host "Iniciando NTLite..."
 
-    # 📦 PEGAR ISO
-    - name: Collect ISO
+        $proc = Start-Process $exe `
+          -ArgumentList "/silent","/preset:$xml","/apply","/exit","/log:$log" `
+          -PassThru
+
+        # 🔥 ESPERA LOG CRIAR
+        while (!(Test-Path $log)) {
+          Write-Host "Aguardando NTLite iniciar..."
+          Start-Sleep -Seconds 2
+        }
+
+        Write-Host "===== NTLITE LOG AO VIVO ====="
+
+        $lastSize = 0
+
+        # 🔥 STREAM REAL
+        while (!$proc.HasExited) {
+
+          $content = Get-Content $log -Raw
+
+          if ($content.Length -gt $lastSize) {
+            $new = $content.Substring($lastSize)
+            Write-Output $new
+            $lastSize = $content.Length
+          }
+
+          Start-Sleep -Seconds 3
+        }
+
+        Write-Host "===== FINAL ====="
+        Get-Content $log -Tail 50
+
+        if ($proc.ExitCode -ne 0) {
+          Write-Error "NTLite falhou"
+          exit 1
+        }
+
+    # =========================
+    # CRIAR ISO FINAL
+    # =========================
+    - name: Create ISO
+      shell: cmd
       run: |
-        mkdir output
-        Get-ChildItem -Recurse -Filter *.iso | Copy-Item -Destination output -ErrorAction SilentlyContinue
+        mkdir FINAL
 
-    # 🚀 UPLOAD
-    - name: Upload ISO
-      uses: actions/upload-artifact@v4
+        oscdimg ^
+        -bootdata:2#p0,e,bISO\ISO_EXTRACTED\boot\etfsboot.com#pEF,e,bISO\ISO_EXTRACTED\efi\microsoft\boot\efisys.bin ^
+        -u2 -h -m -o ^
+        -lWIN10_CUSTOM ^
+        ISO\ISO_EXTRACTED FINAL\Win10LTSC_21.04.2026_ntlite_actions.iso
+
+    # =========================
+    # SPLIT ISO
+    # =========================
+    - name: Split ISO
+      run: |
+        7z a -v1900m FINAL\Win10LTSC_21.04.2026_ntlite_actions.7z FINAL\Win10LTSC_21.04.2026_ntlite_actions.iso
+
+    # =========================
+    # UPLOAD RELEASE
+    # =========================
+    - name: Upload Release
+      uses: softprops/action-gh-release@v2
       with:
-        name: ISO_FINAL
-        path: output
+        tag_name: build-${{ github.run_number }}
+        name: Win10LTSC 21.04.2026 ntlite actions
+        files: FINAL\*.7z*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
