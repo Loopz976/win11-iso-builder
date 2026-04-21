@@ -1,4 +1,4 @@
-name: Build Windows ISO v2
+name: Build Windows ISO
 
 on:
   workflow_dispatch:
@@ -35,7 +35,7 @@ jobs:
         7z x part1.7z.001 -oISO_EXTRACTED -y
 
     # =========================
-    # BAIXAR NTLITE PROJETO
+    # BAIXAR PROJETO NTLITE
     # =========================
     - name: Download ProjetoNTLite
       run: |
@@ -46,50 +46,67 @@ jobs:
         7z x ProjetoNTLite.zip -oProjetoNTLite -y
 
     # =========================
-    # BAIXAR PRESET
+    # CORRIGIR XML DUPLO
     # =========================
-    - name: Download Preset
+    - name: Fix XML Name
+      shell: cmd
       run: |
-        curl -L -o Preset.zip https://github.com/Loopz976/ltsc-auto-builder/raw/main/Preset.zip
-
-    - name: Extract Preset
-      run: |
-        mkdir ProjetoNTLite\Preset
-        7z x Preset.zip -oProjetoNTLite\Preset -y
-
-    - name: Check Preset (DEBUG)
-      run: |
-        dir ProjetoNTLite\Preset
+        cd ProjetoNTLite\Preset
+        for %%f in (*.xml.xml) do ren "%%f" "*.xml"
 
     # =========================
-    # RODAR NTLITE COM LOG AO VIVO
+    # DETECTAR XML AUTOMATICO
     # =========================
-    - name: Run NTLite (Live Log)
+    - name: Detect XML Preset
+      id: preset
+      shell: powershell
+      run: |
+        $xml = Get-ChildItem "ProjetoNTLite\Preset" -Filter *.xml -Recurse | Select-Object -First 1
+        if (!$xml) {
+          Write-Error "Nenhum XML encontrado"
+          exit 1
+        }
+        echo "XML=$($xml.FullName)" >> $env:GITHUB_ENV
+        Write-Host "Preset encontrado: $($xml.FullName)"
+
+    # =========================
+    # RODAR NTLITE + LOG AO VIVO
+    # =========================
+    - name: Run NTLite (LIVE REAL)
       shell: powershell
       run: |
         $log = "ntlite.log"
 
         Write-Host "Iniciando NTLite..."
 
-        $process = Start-Process "ProjetoNTLite\NTLite\NTLite.exe" `
-          -ArgumentList "/silent /load:Preset\W10_19044_FINAL_NVIDIA_21_04_26.xml /apply /exit /log:$log" `
+        $proc = Start-Process "ProjetoNTLite\NTLite\NTLite.exe" `
+          -ArgumentList "/silent /load:$env:XML /apply /exit /log:$log" `
           -PassThru
 
-        while (-not $process.HasExited) {
-            if (Test-Path $log) {
-                Get-Content $log -Tail 5
-            } else {
-                Write-Host "Aguardando log..."
+        # espera log nascer
+        while (!(Test-Path $log)) {
+          Write-Host "Aguardando log iniciar..."
+          Start-Sleep -Seconds 2
+        }
+
+        Write-Host "Log iniciado! Streaming..."
+
+        $lastSize = 0
+
+        while (!$proc.HasExited) {
+          if (Test-Path $log) {
+            $content = Get-Content $log -Raw
+            if ($content.Length -gt $lastSize) {
+              Write-Output ($content.Substring($lastSize))
+              $lastSize = $content.Length
             }
-            Start-Sleep -Seconds 10
+          }
+          Start-Sleep -Seconds 3
         }
 
-        Write-Host "NTLite finalizado"
+        Write-Host "NTLite finalizado."
 
-        if (Test-Path $log) {
-            Write-Host "==== LOG FINAL ===="
-            Get-Content $log -Tail 50
-        }
+        Get-Content $log -Tail 50
 
     # =========================
     # CRIAR ISO
