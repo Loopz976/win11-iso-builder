@@ -31,16 +31,31 @@ jobs:
           mkdir D:\W10UI\Updates
 
       # =========================
-      # EXTRAIR W10UI (CORRIGIDO)
+      # EXTRAIR W10UI (FIX FINAL)
       # =========================
       - name: Extrair W10UI
         run: |
-          7z x "%CD%\W10UI_10.59b.zip" -oD:\W10UI\tmp -y
-          xcopy D:\W10UI\tmp\* D:\W10UI\ /E /H /Y
-          rmdir /s /q D:\W10UI\tmp
+          7z x "%CD%\W10UI_10.59b.zip" -oD:\W10UI -y
+
+          REM mover conteúdo se tiver pasta interna
+          for /d %%i in (D:\W10UI\W10UI*) do (
+            xcopy "%%i\*" D:\W10UI\ /E /H /Y
+          )
+
+          REM limpar pasta duplicada
+          for /d %%i in (D:\W10UI\W10UI*) do (
+            rmdir /s /q "%%i"
+          )
+
+          REM validação crítica
+          if not exist D:\W10UI\W10UI.cmd (
+            echo ERRO: W10UI.cmd NAO ENCONTRADO
+            dir D:\W10UI
+            exit /b 1
+          )
 
       # =========================
-      # BAIXAR ISO
+      # BAIXAR ISO BASE
       # =========================
       - name: Baixar ISO
         run: |
@@ -59,21 +74,21 @@ jobs:
           )
 
       # =========================
-      # PREPARAR WIM
+      # PREPARAR INSTALL.WIM
       # =========================
       - name: Preparar install.wim
         run: |
           copy D:\W10UI\DVD\sources\install.wim D:\W10UI\install.wim
 
       # =========================
-      # UPDATE
+      # UPDATE (.MSU)
       # =========================
       - name: Baixar update
         run: |
           curl -L -o D:\W10UI\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
-      # DRIVER
+      # DRIVER NVIDIA
       # =========================
       - name: Baixar driver NVIDIA
         run: |
@@ -81,7 +96,7 @@ jobs:
           7z x D:\W10UI\nvidia.zip -oD:\W10UI\Drivers -y
 
       # =========================
-      # EXECUTAR W10UI (SCRIPT AUTO)
+      # EXECUTAR W10UI (100% AUTOMÁTICO)
       # =========================
       - name: Executar W10UI automático
         run: |
@@ -89,7 +104,7 @@ jobs:
           call "%GITHUB_WORKSPACE%\AUTO_W10UI.cmd"
 
       # =========================
-      # DETECTAR ISO
+      # DETECTAR ISO FINAL
       # =========================
       - name: Detectar ISO final
         run: |
@@ -104,7 +119,7 @@ jobs:
           7z a -t7z -mx=9 -v1900m D:\W10UI\FINAL.7z "%FINAL%"
 
       # =========================
-      # UPLOAD
+      # UPLOAD RELEASE
       # =========================
       - name: Upload release
         uses: softprops/action-gh-release@v2
