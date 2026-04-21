@@ -1,4 +1,4 @@
-name: LTSC W10UI FULL AUTO
+name: LTSC W10UI AUTO FULL
 
 on:
   workflow_dispatch:
@@ -28,7 +28,7 @@ jobs:
           mkdir D:\W10UI\Updates
 
       # =========================
-      # W10UI
+      # EXTRAIR W10UI
       # =========================
       - name: Extrair W10UI
         run: |
@@ -36,84 +36,79 @@ jobs:
           7z x D:\W10UI\w10ui.zip -oD:\W10UI -y
 
       # =========================
-      # ISO
+      # ISO BASE (SEUS LINKS)
       # =========================
       - name: Baixar ISO
         run: |
-          curl -L -o D:\W10UI\base.iso "LINK_ISO"
+          curl -L -o D:\W10UI\base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
+          curl -L -o D:\W10UI\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
+          curl -L -o D:\W10UI\base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
       - name: Extrair ISO
         run: |
-          7z x D:\W10UI\base.iso -oD:\W10UI\DVD -y
+          7z x D:\W10UI\base.7z.001 -oD:\W10UI -y
 
-      - name: Preparar WIM
+      - name: Extrair estrutura ISO
+        run: |
+          for %%i in (D:\W10UI\*.iso) do (
+            7z x "%%i" -oD:\W10UI\DVD -y
+          )
+
+      # =========================
+      # INSTALL.WIM
+      # =========================
+      - name: Preparar install.wim
         run: |
           copy D:\W10UI\DVD\sources\install.wim D:\W10UI\install.wim
 
       # =========================
-      # UPDATE
+      # UPDATE (SEU LINK)
       # =========================
-      - name: Update
+      - name: Baixar update
         run: |
-          curl -L -o D:\W10UI\Updates\update.msu "LINK_MSU"
+          curl -L -o D:\W10UI\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
-      # DRIVER
+      # DRIVER NVIDIA (SEU LINK)
       # =========================
-      - name: Drivers
+      - name: Baixar driver NVIDIA
         run: |
-          curl -L -o D:\W10UI\drv.zip "LINK_DRIVER"
-          7z x D:\W10UI\drv.zip -oD:\W10UI\Drivers -y
+          curl -L -o D:\W10UI\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
+          7z x D:\W10UI\nvidia.zip -oD:\W10UI\Drivers -y
 
       # =========================
-      # EXECUÇÃO FULL (SEM INI EXTERNO)
+      # COPIAR SCRIPT AUTO
       # =========================
-      - name: Rodar W10UI FULL
+      - name: Copiar AUTO_W10UI.cmd
+        run: |
+          copy "%CD%\AUTO_W10UI.cmd" D:\W10UI\AUTO_W10UI.cmd
+
+      # =========================
+      # EXECUTAR W10UI AUTOMÁTICO
+      # =========================
+      - name: Executar W10UI automático
         run: |
           cd /d D:\W10UI
-
-          echo ==== FORCE CONFIG ====
-
-          set "_target=D:\W10UI\install.wim"
-          set "_repo=D:\W10UI"
-          set "_drv=D:\W10UI\Drivers"
-
-          set "AddUpdates=1"
-          set "AddDrivers=1"
-          set "Cleanup=1"
-          set "ResetBase=1"
-          set "Rebuild=1"
-          set "Net35=1"
-
-          set "wim2esd=1"
-          set "ESDCompress=LZMS"
-
-          set "ISO=1"
-          set "ISODir=D:\W10UI\ISO"
-          set "MountDir=D:\W10UI\MOUNT"
-          set "_CabDir=D:\W10UI\CAB"
-
-          set "_work=1"
-          set "_act=1"
-          set "AutoStart=1"
-
-          call W10UI.cmd
+          call AUTO_W10UI.cmd
 
       # =========================
-      # DETECTAR ISO
+      # DETECTAR ISO FINAL
       # =========================
       - name: Detectar ISO
         run: |
+          echo ==== ISO GERADA ====
+          dir D:\W10UI\ISO
           for %%i in (D:\W10UI\ISO\*.iso) do set FINAL=%%i
           echo FINAL=%FINAL%>>%GITHUB_ENV%
 
       # =========================
       # UPLOAD
       # =========================
-      - name: Upload
+      - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
+          name: LTSC FINAL
           files: ${{ env.FINAL }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
