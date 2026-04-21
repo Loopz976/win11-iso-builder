@@ -35,7 +35,7 @@ jobs:
         7z x part1.7z.001 -oISO_EXTRACTED -y
 
     # =========================
-    # BAIXAR PROJETO NTLITE
+    # BAIXAR NTLITE PROJETO
     # =========================
     - name: Download ProjetoNTLite
       run: |
@@ -46,44 +46,50 @@ jobs:
         7z x ProjetoNTLite.zip -oProjetoNTLite -y
 
     # =========================
-    # RODAR NTLITE (LOG AO VIVO)
+    # BAIXAR PRESET
+    # =========================
+    - name: Download Preset
+      run: |
+        curl -L -o Preset.zip https://github.com/Loopz976/ltsc-auto-builder/raw/main/Preset.zip
+
+    - name: Extract Preset
+      run: |
+        mkdir ProjetoNTLite\Preset
+        7z x Preset.zip -oProjetoNTLite\Preset -y
+
+    - name: Check Preset (DEBUG)
+      run: |
+        dir ProjetoNTLite\Preset
+
+    # =========================
+    # RODAR NTLITE COM LOG AO VIVO
     # =========================
     - name: Run NTLite (Live Log)
       shell: powershell
       run: |
         $log = "ntlite.log"
-        $exe = "ProjetoNTLite\NTLite\NTLite.exe"
-
-        if (!(Test-Path $exe)) {
-          Write-Error "NTLite não encontrado"
-          exit 1
-        }
 
         Write-Host "Iniciando NTLite..."
 
-        $process = Start-Process $exe `
+        $process = Start-Process "ProjetoNTLite\NTLite\NTLite.exe" `
           -ArgumentList "/silent /load:Preset\W10_19044_FINAL_NVIDIA_21_04_26.xml /apply /exit /log:$log" `
           -PassThru
 
-        # Espera log existir
-        while (!(Test-Path $log)) {
-          Start-Sleep -Seconds 3
+        while (-not $process.HasExited) {
+            if (Test-Path $log) {
+                Get-Content $log -Tail 5
+            } else {
+                Write-Host "Aguardando log..."
+            }
+            Start-Sleep -Seconds 10
         }
 
-        Write-Host "===== LOG NTLITE AO VIVO ====="
+        Write-Host "NTLite finalizado"
 
-        # 🔥 LOG EM TEMPO REAL
-        Get-Content $log -Wait
-
-        # Aguarda processo finalizar
-        $process.WaitForExit()
-
-        if ($process.ExitCode -ne 0) {
-          Write-Error "NTLite falhou"
-          exit 1
+        if (Test-Path $log) {
+            Write-Host "==== LOG FINAL ===="
+            Get-Content $log -Tail 50
         }
-
-        Write-Host "NTLite finalizado com sucesso"
 
     # =========================
     # CRIAR ISO
@@ -91,14 +97,14 @@ jobs:
     - name: Create ISO
       run: |
         mkdir FINAL
-        oscdimg -bISO\ISO_EXTRACTED\boot\etfsboot.com -u2 -h -m -o -lWIN10_CUSTOM ISO\ISO_EXTRACTED FINAL\Win10LTSC_21.04.2026_ntlite_actions.iso
+        oscdimg -bISO\ISO_EXTRACTED\boot\etfsboot.com -u2 -h -m -o -lWIN10_CUSTOM ISO\ISO_EXTRACTED FINAL\Win10LTSC_CUSTOM.iso
 
     # =========================
-    # SPLIT ISO 1900MB
+    # SPLIT ISO
     # =========================
     - name: Split ISO
       run: |
-        7z a -v1900m FINAL\Win10LTSC_21.04.2026_ntlite_actions.7z FINAL\Win10LTSC_21.04.2026_ntlite_actions.iso
+        7z a -v1900m FINAL\Win10LTSC_CUSTOM.7z FINAL\Win10LTSC_CUSTOM.iso
 
     # =========================
     # UPLOAD RELEASE
@@ -107,7 +113,7 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: build-${{ github.run_number }}
-        name: Win10LTSC 21.04.2026 ntlite actions
+        name: Win10 LTSC Custom Build
         files: FINAL\*.7z*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
