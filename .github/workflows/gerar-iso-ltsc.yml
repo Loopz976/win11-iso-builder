@@ -10,101 +10,107 @@ jobs:
   build:
     runs-on: windows-latest
 
+    defaults:
+      run:
+        shell: cmd
+
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    # ================================
-    # PREPARAR AMBIENTE
-    # ================================
-    - name: Preparar ambiente
-      run: |
-        mkdir D:\W10UI
-        mkdir D:\W10UI\ISO
-        mkdir D:\W10UI\MOUNT
-        mkdir D:\W10UI\CAB
-        mkdir D:\W10UI\Updates
-        mkdir D:\W10UI\Drivers
+      # =========================
+      # PREPARAR AMBIENTE
+      # =========================
+      - name: Preparar ambiente
+        run: |
+          if exist D:\W10UI rmdir /s /q D:\W10UI
+          mkdir D:\W10UI
+          mkdir D:\W10UI\ISO
+          mkdir D:\W10UI\MOUNT
+          mkdir D:\W10UI\CAB
+          mkdir D:\W10UI\Drivers
+          mkdir D:\W10UI\Updates
 
-    # ================================
-    # EXTRAIR W10UI (CORRETO)
-    # ================================
-    - name: Extrair W10UI
-      run: |
-        7z x "%GITHUB_WORKSPACE%\W10UI_10.59b.zip" -oD:\W10UI\tmp -y
-        xcopy D:\W10UI\tmp\* D:\W10UI\ /E /H /Y
-        rmdir /s /q D:\W10UI\tmp
+      # =========================
+      # EXTRAIR W10UI (CORRIGIDO)
+      # =========================
+      - name: Extrair W10UI
+        run: |
+          7z x "%CD%\W10UI_10.59b.zip" -oD:\W10UI\tmp -y
+          xcopy D:\W10UI\tmp\* D:\W10UI\ /E /H /Y
+          rmdir /s /q D:\W10UI\tmp
 
-    # ================================
-    # BAIXAR ISO (SEUS LINKS)
-    # ================================
-    - name: Baixar ISO
-      run: |
-        curl -L -o D:\W10UI\base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
-        curl -L -o D:\W10UI\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
-        curl -L -o D:\W10UI\base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
+      # =========================
+      # BAIXAR ISO
+      # =========================
+      - name: Baixar ISO
+        run: |
+          curl -L -o D:\W10UI\base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
+          curl -L -o D:\W10UI\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
+          curl -L -o D:\W10UI\base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
-    # ================================
-    # EXTRAIR ISO
-    # ================================
-    - name: Extrair ISO
-      run: |
-        7z x D:\W10UI\base.7z.001 -oD:\W10UI -y
+      - name: Extrair ISO
+        run: |
+          7z x D:\W10UI\base.7z.001 -oD:\W10UI -y
 
-    - name: Extrair estrutura ISO
-      run: |
-        for %%i in (D:\W10UI\*.iso) do (
-          7z x "%%i" -oD:\W10UI\ISO -y
-        )
+      - name: Extrair estrutura ISO
+        run: |
+          for %%i in (D:\W10UI\*.iso) do (
+            7z x "%%i" -oD:\W10UI\DVD -y
+          )
 
-    # ================================
-    # PREPARAR INSTALL.WIM
-    # ================================
-    - name: Preparar install.wim
-      run: |
-        if exist D:\W10UI\ISO\sources\install.esd (
-          dism /Export-Image /SourceImageFile:D:\W10UI\ISO\sources\install.esd /SourceIndex:1 /DestinationImageFile:D:\W10UI\install.wim /Compress:max
-        ) else (
-          copy D:\W10UI\ISO\sources\install.wim D:\W10UI\install.wim
-        )
+      # =========================
+      # PREPARAR WIM
+      # =========================
+      - name: Preparar install.wim
+        run: |
+          copy D:\W10UI\DVD\sources\install.wim D:\W10UI\install.wim
 
-    # ================================
-    # BAIXAR UPDATE (SEU LINK)
-    # ================================
-    - name: Baixar update
-      run: |
-        curl -L -o D:\W10UI\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
+      # =========================
+      # UPDATE
+      # =========================
+      - name: Baixar update
+        run: |
+          curl -L -o D:\W10UI\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
-    # ================================
-    # BAIXAR DRIVER NVIDIA (SEU LINK)
-    # ================================
-    - name: Baixar driver NVIDIA
-      run: |
-        curl -L -o D:\W10UI\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
-        7z x D:\W10UI\nvidia.zip -oD:\W10UI\Drivers -y
+      # =========================
+      # DRIVER
+      # =========================
+      - name: Baixar driver NVIDIA
+        run: |
+          curl -L -o D:\W10UI\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
+          7z x D:\W10UI\nvidia.zip -oD:\W10UI\Drivers -y
 
-    # ================================
-    # EXECUTAR W10UI AUTOMÁTICO
-    # ================================
-    - name: Executar W10UI automático
-      run: |
-        cd /d D:\W10UI
-        call "%GITHUB_WORKSPACE%\AUTO_W10UI.cmd"
+      # =========================
+      # EXECUTAR W10UI (SCRIPT AUTO)
+      # =========================
+      - name: Executar W10UI automático
+        run: |
+          cd /d D:\W10UI
+          call "%GITHUB_WORKSPACE%\AUTO_W10UI.cmd"
 
-    # ================================
-    # GERAR ISO FINAL
-    # ================================
-    - name: Criar ISO final
-      run: |
-        oscdimg -bD:\W10UI\ISO\boot\etfsboot.com -u2 -h -m -o -lW10_CUSTOM D:\W10UI\ISO D:\W10UI\FINAL.iso
+      # =========================
+      # DETECTAR ISO
+      # =========================
+      - name: Detectar ISO final
+        run: |
+          for %%i in (D:\W10UI\ISO\*.iso) do set FINAL=%%i
+          echo FINAL=%FINAL%>>%GITHUB_ENV%
 
-    # ================================
-    # UPLOAD RELEASE
-    # ================================
-    - name: Upload ISO
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: LTSC-AUTO-${{ github.run_number }}
-        files: D:\W10UI\FINAL.iso
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # =========================
+      # COMPACTAR
+      # =========================
+      - name: Compactar ISO
+        run: |
+          7z a -t7z -mx=9 -v1900m D:\W10UI\FINAL.7z "%FINAL%"
+
+      # =========================
+      # UPLOAD
+      # =========================
+      - name: Upload release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ltsc-${{ github.run_number }}
+          name: LTSC FINAL
+          files: D:\W10UI\FINAL.7z*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
