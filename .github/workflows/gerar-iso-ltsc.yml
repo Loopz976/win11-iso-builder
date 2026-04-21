@@ -1,4 +1,4 @@
-name: LTSC AUTO BUILD (FINAL REAL)
+name: LTSC AUTO BUILD (UUP + DISM FINAL FIX)
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ jobs:
     - uses: actions/checkout@v4
 
     # =========================
-    # PREPARAR
+    # PREPARAR AMBIENTE
     # =========================
     - name: Preparar ambiente
       run: |
@@ -32,23 +32,20 @@ jobs:
         mkdir D:\BIN
 
     # =========================
-    # 7ZIP + ARIA2C.EXE
+    # INSTALAR DEPENDÊNCIAS
     # =========================
-    - name: Instalar dependencias
+    - name: Instalar 7zip + aria2c
       run: |
         choco install 7zip -y
 
-        echo Baixando aria2c...
         curl -L -o D:\BIN\aria2.zip https://github.com/aria2/aria2/releases/latest/download/aria2-1.37.0-win-64bit-build1.zip
-
         7z x D:\BIN\aria2.zip -oD:\BIN\aria2
-
         copy D:\BIN\aria2\aria2-1.37.0-win-64bit-build1\aria2c.exe D:\BIN\aria2c.exe
 
     # =========================
     # ISO BASE
     # =========================
-    - name: Baixar ISO base
+    - name: Baixar ISO
       run: |
         curl -L -o D:\ISO\w10.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
         curl -L -o D:\ISO\w10.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
@@ -58,28 +55,30 @@ jobs:
       run: |
         7z x D:\ISO\w10.7z.001 -oD:\ISO\Extract
 
-    - name: Preparar WIM
+    - name: Preparar install.wim
       run: |
         copy D:\ISO\Extract\sources\install.wim D:\install.wim
 
     # =========================
     # UUP SCRIPT
     # =========================
-    - name: Extrair UUP
+    - name: Extrair script UUP
       run: |
         7z x Updates.zip -oD:\UUP
 
-    - name: Rodar UUP (ARIA2 OK)
+    - name: Rodar UUP download
       run: |
         cd /d D:\UUP
-
         set PATH=D:\BIN;%PATH%
-
-        echo Verificando aria2c...
         aria2c -v
-
-        echo Rodando script UUP...
         call uup_download_windows.cmd
+
+    # =========================
+    # DEBUG (CONFIRMAR ARQUIVOS)
+    # =========================
+    - name: Listar UUPs
+      run: |
+        dir D:\UUP\UUPs
 
     # =========================
     # MONTAR IMAGEM
@@ -94,13 +93,18 @@ jobs:
         dism /image:D:\Mount /cleanup-image /startcomponentcleanup
 
     # =========================
-    # INTEGRAR UPDATES (CAB)
+    # INTEGRAR UPDATES (CORRETO)
     # =========================
-    - name: Integrar updates UUP
+    - name: Integrar updates (SSU primeiro)
       run: |
-        for /r D:\UUP %i in (*.cab) do (
-          echo Instalando %i
-          dism /image:D:\Mount /add-package /packagepath:%i /ignorecheck
+        echo Instalando SSU...
+        for %%i in (D:\UUP\UUPs\*ssu*.cab) do (
+          dism /image:D:\Mount /add-package /packagepath:%%i
+        )
+
+        echo Instalando restantes...
+        for %%i in (D:\UUP\UUPs\*.cab) do (
+          dism /image:D:\Mount /add-package /packagepath:%%i /ignorecheck
         )
 
     # =========================
@@ -125,14 +129,14 @@ jobs:
       run: |
         dism /image:D:\Mount /cleanup-image /startcomponentcleanup /resetbase
 
-    - name: Commit
+    - name: Commit imagem
       run: |
         dism /unmount-wim /mountdir:D:\Mount /commit
 
     # =========================
-    # ESD MAX
+    # CONVERTER PARA ESD (MAX)
     # =========================
-    - name: Converter para ESD (MAX)
+    - name: Converter ESD
       run: |
         dism /export-image /sourceimagefile:D:\install.wim /sourceindex:1 /destinationimagefile:D:\ISO\Extract\sources\install.esd /compress:recovery
 
@@ -141,16 +145,16 @@ jobs:
         del D:\ISO\Extract\sources\install.wim
 
     # =========================
-    # ISO FINAL
+    # CRIAR ISO
     # =========================
     - name: Criar ISO
       run: |
         oscdimg -m -o -u2 -udfver102 D:\ISO\Extract D:\Final\LTSC_FINAL.iso
 
     # =========================
-    # UPLOAD RELEASE
+    # UPLOAD
     # =========================
-    - name: Upload ISO
+    - name: Upload Release
       uses: softprops/action-gh-release@v1
       with:
         tag_name: build-${{ github.run_number }}
