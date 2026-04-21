@@ -1,1 +1,68 @@
+name: Build Win10 LTSC NTLite Actions
 
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    # 🔽 Baixar ISO (3 partes)
+    - name: Download ISO parts
+      run: |
+        mkdir ISO
+        cd ISO
+        curl -L -o part1.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
+        curl -L -o part2.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
+        curl -L -o part3.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
+
+    # 🔽 Extrair ISO
+    - name: Extract ISO
+      run: |
+        cd ISO
+        7z x part1.7z.001
+
+    # 🔽 Baixar ProjetoNTlite
+    - name: Download ProjetoNTlite
+      run: |
+        curl -L -o ProjetoNTlite.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/projetontlite/ProjetoNTlite.zip
+
+    - name: Extract ProjetoNTlite
+      run: |
+        7z x ProjetoNTlite.zip -oProjeto
+
+    # 🔽 Executar NTLite
+    - name: Run NTLite
+      run: |
+        Projeto\NTLite\NTLite.exe /silent /apply "Preset\W10_19044_FINAL_NVIDIA_21_04_26.xml"
+
+    # 🔽 Criar ISO final
+    - name: Create ISO
+      run: |
+        oscdimg -bISO\boot\etfsboot.com -u2 -h -m -o ISO C:\Windows\Temp\ISO_OUTPUT Win10LTSC_21.04.2026_NTLite_Actions.iso
+
+    # 🔽 Dividir ISO em partes 1900MB
+    - name: Split ISO
+      run: |
+        7z a -v1900m Win10LTSC_21.04.2026_NTLite_Actions.7z Win10LTSC_21.04.2026_NTLite_Actions.iso
+
+    # 🔽 Upload para Releases
+    - name: Upload Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: build-ntlite
+        name: Win10LTSC 21.04.2026 NTLite Actions
+        files: |
+          Win10LTSC_21.04.2026_NTLite_Actions.7z.001
+          Win10LTSC_21.04.2026_NTLite_Actions.7z.002
+          Win10LTSC_21.04.2026_NTLite_Actions.7z.003
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
