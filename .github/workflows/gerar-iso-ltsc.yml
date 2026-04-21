@@ -1,4 +1,4 @@
-name: LTSC W10UI FINAL AUTO
+name: LTSC AUTO BUILD FINAL
 
 on:
   workflow_dispatch:
@@ -15,123 +15,120 @@ jobs:
       - uses: actions/checkout@v4
 
       # =========================
-      # PREPARAR AMBIENTE
+      # PREPARAR
       # =========================
       - name: Preparar ambiente
         run: |
-          if exist D:\W10UI rmdir /s /q D:\W10UI
-          mkdir D:\W10UI
-          mkdir D:\W10UI\ISO
-          mkdir D:\W10UI\MOUNT
-          mkdir D:\W10UI\CAB
-          mkdir D:\W10UI\Drivers
-          mkdir D:\W10UI\Updates
-
-      # =========================
-      # EXTRAIR W10UI (ZIP DO REPO)
-      # =========================
-      - name: Extrair W10UI
-        run: |
-          copy "%CD%\W10UI_10.59b.zip" D:\W10UI\w10ui.zip
-          7z x D:\W10UI\w10ui.zip -oD:\W10UI -y
+          mkdir D:\ISO
+          mkdir D:\MOUNT
+          mkdir D:\UPDATES
+          mkdir D:\DRIVERS
 
       # =========================
       # BAIXAR ISO BASE
       # =========================
       - name: Baixar ISO
         run: |
-          curl -L -o D:\W10UI\base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
-          curl -L -o D:\W10UI\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
-          curl -L -o D:\W10UI\base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
+          curl -L -o D:\ISO\base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
+          curl -L -o D:\ISO\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
+          curl -L -o D:\ISO\base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
       - name: Extrair ISO
         run: |
-          7z x D:\W10UI\base.7z.001 -oD:\W10UI -y
+          7z x D:\ISO\base.7z.001 -oD:\ISO -y
 
       - name: Extrair estrutura ISO
         run: |
-          for %%i in (D:\W10UI\*.iso) do (
-            7z x "%%i" -oD:\W10UI\DVD -y
+          for %%i in (D:\ISO\*.iso) do (
+            7z x "%%i" -oD:\ISO\DVD -y
           )
 
       # =========================
-      # PREPARAR INSTALL.WIM
-      # =========================
-      - name: Preparar install.wim
-        run: |
-          copy D:\W10UI\DVD\sources\install.wim D:\W10UI\install.wim
-
-      # =========================
-      # BAIXAR UPDATE (PASTA CORRETA)
+      # UPDATE
       # =========================
       - name: Baixar update
         run: |
-          curl -L -o D:\W10UI\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
+          curl -L -o D:\UPDATES\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
-      # BAIXAR DRIVER
+      # DRIVER
       # =========================
       - name: Baixar driver NVIDIA
         run: |
-          curl -L -o D:\W10UI\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
-          7z x D:\W10UI\nvidia.zip -oD:\W10UI\Drivers -y
+          curl -L -o D:\DRIVERS\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
+          7z x D:\DRIVERS\nvidia.zip -oD:\DRIVERS -y
 
       # =========================
-      # INI CORRETO (💣 AQUI ESTAVA O ERRO)
+      # MONTAR WIM
       # =========================
-      - name: Criar W10UI.ini
+      - name: Montar imagem
         run: |
-          (
-          echo [W10UI]
-          echo Target=D:\W10UI\install.wim
-          echo Repo=D:\W10UI
-          echo AutoStart=1
-          echo Silent=1
-          echo AddUpdates=1
-          echo AddDrivers=1
-          echo Drv_Source=D:\W10UI\Drivers
-          echo Net35=1
-          echo Cleanup=1
-          echo ResetBase=1
-          echo Rebuild=1
-          echo ISO=1
-          echo ISODir=D:\W10UI\ISO
-          echo MountDir=D:\W10UI\MOUNT
-          echo _CabDir=D:\W10UI\CAB
-          echo wim2esd=1
-          ) > D:\W10UI\W10UI.ini
+          dism /Mount-Wim /WimFile:D:\ISO\DVD\sources\install.wim /index:1 /MountDir:D:\MOUNT
 
       # =========================
-      # EXECUTAR W10UI (SEM GAMBIARRA)
+      # INTEGRAR UPDATE
       # =========================
-      - name: Executar W10UI
+      - name: Integrar update
         run: |
-          cd /d D:\W10UI
-          call W10UI.cmd
+          dism /Image:D:\MOUNT /Add-Package /PackagePath:D:\UPDATES
 
       # =========================
-      # DETECTAR ISO FINAL
+      # INTEGRAR DRIVER
       # =========================
-      - name: Detectar ISO final
+      - name: Integrar drivers
         run: |
-          for %%i in (D:\W10UI\ISO\*.iso) do set FINAL=%%i
-          echo FINAL=%FINAL%>>%GITHUB_ENV%
+          dism /Image:D:\MOUNT /Add-Driver /Driver:D:\DRIVERS /Recurse
 
       # =========================
-      # COMPACTAR
+      # .NET 3.5
       # =========================
-      - name: Compactar ISO
+      - name: Ativar NetFx3
         run: |
-          7z a -t7z -mx=9 -v1900m D:\W10UI\FINAL.7z "%FINAL%"
+          dism /Image:D:\MOUNT /Enable-Feature /FeatureName:NetFx3 /All /Source:D:\ISO\DVD\sources\sxs
+
+      # =========================
+      # CLEANUP MÁXIMO
+      # =========================
+      - name: Cleanup
+        run: |
+          dism /Image:D:\MOUNT /Cleanup-Image /StartComponentCleanup /ResetBase
+
+      # =========================
+      # COMMIT
+      # =========================
+      - name: Commit
+        run: |
+          dism /Unmount-Wim /MountDir:D:\MOUNT /Commit
+
+      # =========================
+      # CONVERTER PARA ESD (MÁXIMO)
+      # =========================
+      - name: Converter para ESD
+        run: |
+          dism /Export-Image ^
+          /SourceImageFile:D:\ISO\DVD\sources\install.wim ^
+          /DestinationImageFile:D:\ISO\DVD\sources\install.esd ^
+          /Compress:recovery
+
+      - name: Remover WIM
+        run: |
+          del D:\ISO\DVD\sources\install.wim
+
+      # =========================
+      # GERAR ISO
+      # =========================
+      - name: Criar ISO
+        run: |
+          oscdimg -bD:\ISO\DVD\boot\etfsboot.com -u2 -h -m -o D:\ISO\DVD D:\FINAL.iso
 
       # =========================
       # UPLOAD
       # =========================
-      - name: Upload release
+      - name: Upload
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ltsc-${{ github.run_number }}
+          tag_name: build-${{ github.run_number }}
           name: LTSC FINAL
-          files: D:\W10UI\FINAL.7z*
+          files: D:\FINAL.iso
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
