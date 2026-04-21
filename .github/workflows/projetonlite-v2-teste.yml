@@ -1,4 +1,4 @@
-name: Build ISO NTLite
+name: Build ISO NTLite v2
 
 on:
   workflow_dispatch:
