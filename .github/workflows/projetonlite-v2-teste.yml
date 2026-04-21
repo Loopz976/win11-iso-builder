@@ -1,4 +1,4 @@
-name: Build Windows ISO v2
+name: Build Windows ISO
 
 on:
   workflow_dispatch:
@@ -15,14 +15,13 @@ jobs:
       run: choco install 7zip -y
 
     # =========================
-    # BAIXAR ISO BASE
+    # BAIXAR ISO (3 PARTES)
     # =========================
     - name: Download ISO Parts
       shell: powershell
       run: |
         mkdir ISO
         cd ISO
-
         curl -L -o part1.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
         curl -L -o part1.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
         curl -L -o part1.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
@@ -37,7 +36,7 @@ jobs:
         7z x part1.7z.001 -oISO_EXTRACTED -y
 
     # =========================
-    # BAIXAR NTLITE
+    # BAIXAR PROJETO NTLITE
     # =========================
     - name: Download ProjetoNTLite
       shell: powershell
@@ -48,57 +47,56 @@ jobs:
       run: 7z x ProjetoNTLite.zip -oProjetoNTLite -y
 
     # =========================
-    # FIX AUTOMÁTICO XML
+    # DETECTAR + CORRIGIR XML
     # =========================
-    - name: Fix XML (paths + detect)
+    - name: Detect and Fix XML
       shell: powershell
       run: |
         $xml = Get-ChildItem -Recurse -Filter *.xml | Select-Object -First 1
 
         if (-not $xml) {
-          Write-Error "XML não encontrado"
+          Write-Error "Nenhum XML encontrado!"
           exit 1
         }
 
         Write-Host "XML encontrado:" $xml.FullName
 
+        # Corrige caminhos quebrados
         (Get-Content $xml.FullName) `
           -replace 'C:\\ProjetoNTlite\\', '' `
-          -replace 'D:\\NTLite\.iso', 'output.iso' |
+          -replace 'D:\\.*?\.iso', 'output.iso' |
           Set-Content $xml.FullName
 
-        Write-Host "XML corrigido com sucesso"
+        echo "XML corrigido"
+
+        # Salva caminho para próximos steps
+        echo "XML_PATH=$($xml.FullName)" >> $env:GITHUB_ENV
 
     # =========================
-    # RODAR NTLITE + LOG REALTIME
+    # RODAR NTLITE (FIX REAL)
     # =========================
-    - name: Run NTLite (REALTIME LOG)
+    - name: Run NTLite (Silent + Log)
       shell: powershell
       run: |
         $exe = "ProjetoNTLite\NTLite\NTLite.exe"
-        $xml = Get-ChildItem -Recurse -Filter *.xml | Select-Object -First 1
 
         if (-not (Test-Path $exe)) {
-          Write-Error "NTLite não encontrado"
+          Write-Error "NTLite não encontrado!"
           exit 1
         }
 
-        Write-Host "Usando preset:" $xml.FullName
+        Write-Host "Rodando com preset:" $env:XML_PATH
 
         Start-Process $exe `
-          -ArgumentList "/silent /load:`"$($xml.FullName)`" /apply /exit" `
-          -PassThru | Tee-Object -Variable proc
+          -ArgumentList "/silent /load:`"$env:XML_PATH`" /apply /exit /log:ntlite.log" `
+          -Wait
 
-        # Aguarda processo iniciar de verdade
-        Start-Sleep -Seconds 10
-
-        # Loop acompanhando execução
-        while (-not $proc.HasExited) {
-          Write-Host "NTLite ainda rodando..."
-          Start-Sleep -Seconds 20
+        echo "==== LOG NTLITE ===="
+        if (Test-Path "ntlite.log") {
+          Get-Content ntlite.log -Tail 200
+        } else {
+          echo "Log não encontrado"
         }
-
-        Write-Host "NTLite finalizado!"
 
     # =========================
     # CRIAR ISO
@@ -107,14 +105,14 @@ jobs:
       shell: cmd
       run: |
         mkdir FINAL
-        oscdimg -bISO\ISO_EXTRACTED\boot\etfsboot.com -u2 -h -m -o -lWIN10_CUSTOM ISO\ISO_EXTRACTED FINAL\Win10_CUSTOM.iso
+        oscdimg -bISO\ISO_EXTRACTED\boot\etfsboot.com -u2 -h -m -o -lWIN10_CUSTOM ISO\ISO_EXTRACTED FINAL\Win10LTSC_CUSTOM.iso
 
     # =========================
     # SPLIT ISO
     # =========================
     - name: Split ISO
       run: |
-        7z a -v1900m FINAL\Win10_CUSTOM.7z FINAL\Win10_CUSTOM.iso
+        7z a -v1900m FINAL\Win10LTSC_CUSTOM.7z FINAL\Win10LTSC_CUSTOM.iso
 
     # =========================
     # UPLOAD RELEASE
@@ -123,7 +121,7 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: build-${{ github.run_number }}
-        name: Win10 Custom Build
+        name: Win10 LTSC Custom Build
         files: FINAL\*.7z*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
