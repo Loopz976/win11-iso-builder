@@ -1,4 +1,4 @@
-name: LTSC AUTO BUILD FINAL
+name: LTSC AUTO BUILD FINAL FIXED
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
 
     - name: Preparar ambiente
       run: |
-        if exist D:\ISO rmdir /s /q D:\ISO
+        rmdir /s /q D:\ISO 2>nul
         mkdir D:\ISO
         mkdir D:\ISO\Extract
         mkdir D:\Mount
@@ -41,6 +41,10 @@ jobs:
       run: |
         copy D:\ISO\Extract\sources\install.wim D:\install.wim
 
+    - name: Mostrar indexes
+      run: |
+        dism /get-wiminfo /wimfile:D:\install.wim
+
     - name: Baixar update
       run: |
         curl -L -o D:\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
@@ -53,28 +57,49 @@ jobs:
       run: |
         7z x D:\Drivers\driver.zip -oD:\Drivers\Extract
 
+    # =========================
+    # MONTAGEM LIMPA
+    # =========================
+
     - name: Montar imagem
       run: |
         dism /mount-wim /wimfile:D:\install.wim /index:1 /mountdir:D:\Mount
 
-    - name: Limpar pendencias
+    - name: Reset inicial (ANTI ERRO 0x800f0823)
       run: |
         dism /image:D:\Mount /cleanup-image /revertpendingactions
+        dism /image:D:\Mount /cleanup-image /startcomponentcleanup
+
+    # =========================
+    # UPDATE CORRETO
+    # =========================
 
     - name: Extrair MSU
       run: |
         mkdir D:\Updates\Extract
         expand -F:* D:\Updates\update.msu D:\Updates\Extract
 
-    - name: Integrar update
+    - name: Instalar SSU primeiro (se existir)
       run: |
-        for %i in (D:\Updates\Extract\*.cab) do dism /image:D:\Mount /add-package /packagepath:%i
+        for %i in (D:\Updates\Extract\*ssu*.cab) do (
+          dism /image:D:\Mount /add-package /packagepath:%i
+        )
+
+    - name: Instalar LCU (FORÇADO)
+      run: |
+        for %i in (D:\Updates\Extract\*.cab) do (
+          dism /image:D:\Mount /add-package /packagepath:%i /ignorecheck
+        )
+
+    # =========================
+    # DRIVERS + CLEAN
+    # =========================
 
     - name: Integrar drivers
       run: |
         dism /image:D:\Mount /add-driver /driver:D:\Drivers\Extract /recurse
 
-    - name: Cleanup total
+    - name: Cleanup final (CRÍTICO)
       run: |
         dism /image:D:\Mount /cleanup-image /startcomponentcleanup /resetbase
 
@@ -82,7 +107,11 @@ jobs:
       run: |
         dism /unmount-wim /mountdir:D:\Mount /commit
 
-    - name: Converter para ESD
+    # =========================
+    # ESD + ISO
+    # =========================
+
+    - name: Converter para ESD (MAX)
       run: |
         dism /export-image /sourceimagefile:D:\install.wim /sourceindex:1 /destinationimagefile:D:\ISO\Extract\sources\install.esd /compress:recovery /checkintegrity
 
@@ -93,6 +122,10 @@ jobs:
     - name: Criar ISO
       run: |
         oscdimg -m -o -u2 -udfver102 D:\ISO\Extract D:\Final\LTSC_FINAL.iso
+
+    # =========================
+    # RELEASE
+    # =========================
 
     - name: Upload Release
       uses: softprops/action-gh-release@v1
