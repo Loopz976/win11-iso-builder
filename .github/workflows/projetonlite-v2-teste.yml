@@ -1,4 +1,4 @@
-name: Build Windows ISO
+name: Build Windows ISO v2
 
 on:
   workflow_dispatch:
