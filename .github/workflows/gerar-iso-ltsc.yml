@@ -28,29 +28,29 @@ jobs:
           mkdir D:\W10UI\Drivers
 
       # =========================
-      # GARANTIR QUE O ZIP EXISTE
+      # DEBUG REPO
       # =========================
-      - name: Verificar arquivos do repo
+      - name: Ver arquivos do repo
         run: |
           echo Caminho atual:
           echo %CD%
           dir
 
       # =========================
-      # EXTRAIR W10UI DO REPO
+      # EXTRAIR W10UI (ZIP RAIZ)
       # =========================
       - name: Extrair W10UI
         run: |
           if not exist "%CD%\W10UI_10.59b.zip" (
-            echo ERRO: ZIP nao encontrado na raiz do repo
+            echo ERRO: ZIP nao encontrado na raiz
             exit /b 1
           )
 
           copy "%CD%\W10UI_10.59b.zip" D:\W10UI\w10ui.zip
-
           7z x D:\W10UI\w10ui.zip -oD:\W10UI -y
 
-          xcopy D:\W10UI\W10UI-10.59b\* D:\W10UI\ /E /H /C /I /Y
+          echo Estrutura W10UI:
+          dir D:\W10UI
 
       # =========================
       # BAIXAR ISO BASE
@@ -61,7 +61,7 @@ jobs:
           curl -L -o D:\W10UI\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
           curl -L -o D:\W10UI\base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
-      - name: Extrair ISO (7z split)
+      - name: Extrair ISO
         run: |
           7z x D:\W10UI\base.7z.001 -oD:\W10UI -y
 
