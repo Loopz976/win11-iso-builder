@@ -28,7 +28,7 @@ jobs:
           mkdir D:\W10UI\Updates
 
       # =========================
-      # EXTRAIR W10UI (DO REPO)
+      # EXTRAIR W10UI
       # =========================
       - name: Extrair W10UI
         run: |
@@ -77,7 +77,7 @@ jobs:
           7z x D:\W10UI\nvidia.zip -oD:\W10UI\Drivers -y
 
       # =========================
-      # CRIAR INI CORRETO (CRÍTICO)
+      # CRIAR INI (AGORA CORRETO)
       # =========================
       - name: Criar W10UI.ini
         run: |
@@ -102,15 +102,19 @@ jobs:
           ) > D:\W10UI\W10UI.ini
 
       # =========================
-      # EXECUTAR W10UI
+      # EXECUTAR W10UI (FORÇADO)
       # =========================
-      - name: Executar W10UI
+      - name: Executar W10UI automático
         run: |
           cd /d D:\W10UI
-          call W10UI.cmd
+
+          (
+            echo 0
+            echo 0
+          ) | call W10UI.cmd
 
       # =========================
-      # PEGAR ISO FINAL
+      # DETECTAR ISO FINAL
       # =========================
       - name: Detectar ISO final
         run: |
@@ -118,14 +122,14 @@ jobs:
           echo FINAL=%FINAL%>>%GITHUB_ENV%
 
       # =========================
-      # COMPACTAR
+      # COMPACTAR ISO
       # =========================
       - name: Compactar ISO
         run: |
           7z a -t7z -mx=9 -v1900m D:\W10UI\FINAL.7z "%FINAL%"
 
       # =========================
-      # UPLOAD
+      # UPLOAD RELEASE
       # =========================
       - name: Upload release
         uses: softprops/action-gh-release@v2
