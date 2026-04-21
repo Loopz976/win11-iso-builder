@@ -1,4 +1,4 @@
-name: Build Windows LTSC ISO
+name: Build ISO NTLite
 
 on:
   workflow_dispatch:
@@ -11,10 +11,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # =============================
-      # DOWNLOAD ISO (PARTES)
-      # =============================
-      - name: Download ISO parts
+      # =========================
+      # Baixar ISO (3 partes)
+      # =========================
+      - name: Download ISO Parts
         run: |
           mkdir ISO
           cd ISO
@@ -22,59 +22,57 @@ jobs:
           curl -L -o Win10.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
           curl -L -o Win10.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
 
-      # =============================
-      # EXTRAIR ISO
-      # =============================
+      # =========================
+      # Extrair ISO corretamente
+      # =========================
       - name: Extract ISO
         run: |
           cd ISO
-          7z x Win10.7z.001
+          7z x Win10.7z.001 -y
+          mkdir ..\ISO_EXTRACTED
+          for %i in (*.iso) do 7z x "%i" -o"..\ISO_EXTRACTED" -y
 
-      # =============================
-      # DOWNLOAD PROJETO NTLITE
-      # =============================
+      # =========================
+      # Baixar Projeto NTLite
+      # =========================
       - name: Download ProjetoNTLite
         run: |
           curl -L -o ProjetoNTLite.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/projetontlite/ProjetoNTlite.zip
 
       - name: Extract ProjetoNTLite
         run: |
-          7z x ProjetoNTLite.zip -oProjeto
+          7z x ProjetoNTLite.zip -oProjetoNTLite -y
 
-      # =============================
-      # RODAR NTLITE
-      # =============================
+      # =========================
+      # Rodar NTLite (CORRIGIDO)
+      # =========================
       - name: Run NTLite
         run: |
-          Projeto\NTLite\NTLite.exe ^
-          /image:"ISO" ^
-          /preset:"Preset\W10_19044_FINAL_NVIDIA_21_04_26.xml" ^
-          /apply ^
-          /save ^
-          /exit
+          ProjetoNTLite\NTLite\NTLite.exe /silent /image:"ISO_EXTRACTED" /preset:"Preset\W10_19044_FINAL_NVIDIA_21_04_26.xml" /apply /save /exit
 
-      # =============================
-      # CRIAR ISO FINAL
-      # =============================
+      # =========================
+      # Criar ISO final
+      # =========================
       - name: Create ISO
         run: |
-          oscdimg -bISO\boot\etfsboot.com -u2 -h -m -o ISO C:\output.iso
+          oscdimg -bISO_EXTRACTED\boot\etfsboot.com -u2 -h -m -o ISO_EXTRACTED Win10LTSC_21.04.2026_NTLite_Actions.iso
 
-      # =============================
-      # COMPACTAR EM PARTES 1900MB
-      # =============================
+      # =========================
+      # Dividir em partes 1900MB
+      # =========================
       - name: Split ISO
         run: |
-          7z a -v1900m Win10LTSC_21.04.2026_NTLite_actions.7z C:\output.iso
+          7z a -v1900m Win10LTSC_21.04.2026_NTLite_Actions.7z Win10LTSC_21.04.2026_NTLite_Actions.iso
 
-      # =============================
-      # UPLOAD PARA RELEASE
-      # =============================
+      # =========================
+      # Upload Release
+      # =========================
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-ltsc
-          name: Win10 LTSC 21.04.2026 NTLite actions
-          files: Win10LTSC_21.04.2026_NTLite_actions.7z*
+          tag_name: build-ntlite
+          name: Win10LTSC 21.04.2026 NTLite Actions
+          files: |
+            Win10LTSC_21.04.2026_NTLite_Actions.7z.*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
