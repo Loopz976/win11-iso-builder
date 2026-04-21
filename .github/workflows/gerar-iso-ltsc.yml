@@ -1,4 +1,4 @@
-name: LTSC AUTO BUILD DISM FINAL
+name: LTSC AUTO BUILD FINAL VERSIONED
 
 on:
   workflow_dispatch:
@@ -14,9 +14,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # =========================
-      # PREPARAR
-      # =========================
       - name: Preparar ambiente
         run: |
           if exist D:\Files rmdir /s /q D:\Files
@@ -25,11 +22,10 @@ jobs:
           mkdir D:\Files\DVD
           mkdir D:\Files\MOUNT
           mkdir D:\Files\Updates
+          mkdir D:\Files\Updates\extracted
           mkdir D:\Files\Drivers
 
-      # =========================
-      # BAIXAR ISO
-      # =========================
+      # ISO
       - name: Baixar ISO
         run: |
           curl -L -o D:\Files\base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
@@ -44,25 +40,22 @@ jobs:
         run: |
           for /r D:\Files\ISO %%i in (*.iso) do move "%%i" D:\Files\
 
-      # =========================
-      # EXTRAIR ISO COMPLETA
-      # =========================
       - name: Extrair ISO COMPLETA
         run: |
           for %%i in (D:\Files\*.iso) do (
             7z x "%%i" -oD:\Files\DVD -y
           )
 
-      # =========================
-      # BAIXAR UPDATE
-      # =========================
+      # UPDATE
       - name: Baixar update
         run: |
           curl -L -o D:\Files\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
-      # =========================
-      # BAIXAR DRIVER
-      # =========================
+      - name: Extrair MSU
+        run: |
+          expand -F:* D:\Files\Updates\update.msu D:\Files\Updates\extracted
+
+      # DRIVER
       - name: Baixar driver NVIDIA
         run: |
           curl -L -o D:\Files\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
@@ -71,58 +64,61 @@ jobs:
         run: |
           7z x D:\Files\nvidia.zip -oD:\Files\Drivers -y
 
-      # =========================
-      # MONTAR IMAGEM
-      # =========================
+      # MOUNT
       - name: Montar imagem
         run: |
           dism /Mount-Wim /WimFile:D:\Files\DVD\sources\install.wim /index:1 /MountDir:D:\Files\MOUNT
 
-      # =========================
-      # FIX SERVICING (CRÍTICO)
-      # =========================
-      - name: Preparar imagem (fix servicing)
+      - name: Preparar imagem
         run: |
           dism /Image:D:\Files\MOUNT /Cleanup-Image /StartComponentCleanup
 
-      # =========================
-      # INTEGRAR UPDATE (CORRIGIDO)
-      # =========================
-      - name: Integrar update
+      # SSU
+      - name: Integrar SSU
         run: |
-          dism /Image:D:\Files\MOUNT /Add-Package /PackagePath:D:\Files\Updates\update.msu /IgnoreCheck
+          for %%i in (D:\Files\Updates\extracted\*SSU*.cab) do (
+            dism /Image:D:\Files\MOUNT /Add-Package /PackagePath:"%%i"
+          )
 
-      # =========================
-      # INTEGRAR DRIVERS
-      # =========================
+      # LCU
+      - name: Integrar LCU
+        run: |
+          for %%i in (D:\Files\Updates\extracted\*.cab) do (
+            dism /Image:D:\Files\MOUNT /Add-Package /PackagePath:"%%i"
+          )
+
+      # DRIVERS
       - name: Integrar drivers
         run: |
           dism /Image:D:\Files\MOUNT /Add-Driver /Driver:D:\Files\Drivers /Recurse
 
-      # =========================
-      # ATIVAR NETFX 3.5
-      # =========================
+      # NETFX
       - name: Ativar .NET 3.5
         run: |
           dism /Image:D:\Files\MOUNT /Enable-Feature /FeatureName:NetFx3 /All /Source:D:\Files\DVD\sources\sxs /LimitAccess
 
-      # =========================
-      # CLEANUP FINAL PESADO
-      # =========================
+      # CLEAN FINAL
       - name: Cleanup final
         run: |
           dism /Image:D:\Files\MOUNT /Cleanup-Image /StartComponentCleanup /ResetBase
 
-      # =========================
+      # 💣 PEGAR VERSÃO
+      - name: Detectar versão real
+        run: |
+          reg load HKLM\OFFLINE D:\Files\MOUNT\Windows\System32\Config\SOFTWARE
+          for /f "tokens=3" %%a in ('reg query "HKLM\OFFLINE\Microsoft\Windows NT\CurrentVersion" /v CurrentBuild ^| find "REG_SZ"') do set BUILD=%%a
+          for /f "tokens=3" %%a in ('reg query "HKLM\OFFLINE\Microsoft\Windows NT\CurrentVersion" /v UBR ^| find "REG_DWORD"') do set UBR=%%a
+          set UBR=%UBR:~2%
+          set VERSION=%BUILD%.%UBR%
+          echo VERSION=%VERSION%>>%GITHUB_ENV%
+          reg unload HKLM\OFFLINE
+
       # COMMIT
-      # =========================
       - name: Commit imagem
         run: |
           dism /Unmount-Wim /MountDir:D:\Files\MOUNT /Commit
 
-      # =========================
-      # CONVERTER PARA ESD (MAX)
-      # =========================
+      # ESD
       - name: Converter para ESD
         run: |
           dism /Export-Image /SourceImageFile:D:\Files\DVD\sources\install.wim /SourceIndex:1 /DestinationImageFile:D:\Files\DVD\sources\install.esd /Compress:recovery
@@ -131,28 +127,22 @@ jobs:
         run: |
           del D:\Files\DVD\sources\install.wim
 
-      # =========================
-      # CRIAR ISO
-      # =========================
+      # ISO COM NOME DINÂMICO
       - name: Criar ISO
         run: |
-          oscdimg -m -o -u2 -udfver102 D:\Files\DVD D:\Files\LTSC_FINAL.iso
+          oscdimg -m -o -u2 -udfver102 D:\Files\DVD D:\Files\%VERSION%_WIN10_LTSC_ATUALIZADO.iso
 
-      # =========================
-      # COMPACTAR
-      # =========================
+      # ZIP
       - name: Compactar ISO
         run: |
-          7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z D:\Files\LTSC_FINAL.iso
+          7z a -t7z -mx=9 -v1900m D:\Files\%VERSION%_WIN10_LTSC_ATUALIZADO.7z D:\Files\%VERSION%_WIN10_LTSC_ATUALIZADO.iso
 
-      # =========================
       # UPLOAD
-      # =========================
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ltsc-${{ github.run_number }}
-          name: LTSC Build ${{ github.run_number }}
-          files: D:\Files\LTSC_FINAL.7z*
+          tag_name: ltsc-${{ env.VERSION }}
+          name: LTSC ${{ env.VERSION }}
+          files: D:\Files\*_WIN10_LTSC_ATUALIZADO.7z*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
