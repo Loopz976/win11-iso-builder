@@ -27,7 +27,25 @@ jobs:
           mkdir D:\W10UI\Drivers
 
       # =========================
-      # BAIXAR ISO
+      # DEBUG REPO (GARANTIR ZIP)
+      # =========================
+      - name: Ver arquivos do repo
+        run: |
+          echo Pasta atual:
+          echo %CD%
+          dir
+
+      # =========================
+      # USAR W10UI DO REPO
+      # =========================
+      - name: Extrair W10UI
+        run: |
+          copy "%CD%\W10UI_10.59b.zip" D:\W10UI\w10ui.zip
+          7z x D:\W10UI\w10ui.zip -oD:\W10UI -y
+          xcopy D:\W10UI\W10UI-10.59b\* D:\W10UI\ /E /H /C /I /Y
+
+      # =========================
+      # BAIXAR ISO BASE
       # =========================
       - name: Baixar ISO
         run: |
@@ -39,37 +57,28 @@ jobs:
         run: |
           7z x D:\W10UI\base.7z.001 -oD:\W10UI -y
 
-      - name: Extrair ISO COMPLETA
+      - name: Extrair ISO completa
         run: |
           for %%i in (D:\W10UI\*.iso) do (
             7z x "%%i" -oD:\W10UI\DVD -y
           )
 
       # =========================
-      # COPIAR INSTALL.WIM (💣 SOLUÇÃO DO TARGET)
+      # 💣 TARGET DEFINITIVO (WIM DIRETO)
       # =========================
-      - name: Preparar Target
+      - name: Preparar target
         run: |
           copy D:\W10UI\DVD\sources\install.wim D:\W10UI\install.wim
 
       # =========================
-      # BAIXAR W10UI
-      # =========================
-      - name: Baixar W10UI
-        run: |
-          curl -L -o D:\W10UI\w10ui.zip https://github.com/abbodi1406/W10UI/archive/refs/tags/10.59b.zip
-          7z x D:\W10UI\w10ui.zip -oD:\W10UI -y
-          xcopy D:\W10UI\W10UI-10.59b\* D:\W10UI\ /E /H /C /I /Y
-
-      # =========================
-      # BAIXAR UPDATE
+      # UPDATE
       # =========================
       - name: Baixar update
         run: |
           curl -L -o D:\W10UI\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
-      # BAIXAR DRIVER
+      # DRIVER
       # =========================
       - name: Baixar driver NVIDIA
         run: |
@@ -77,9 +86,9 @@ jobs:
           7z x D:\W10UI\nvidia.zip -oD:\W10UI\Drivers -y
 
       # =========================
-      # CONFIGURAR INI AUTOMÁTICO
+      # CONFIG INI AUTOMÁTICO
       # =========================
-      - name: Criar W10UI.ini automático
+      - name: Criar W10UI.ini
         run: |
           (
           echo Target=D:\W10UI\install.wim
@@ -99,14 +108,7 @@ jobs:
           ) > D:\W10UI\W10UI.ini
 
       # =========================
-      # MOVER UPDATE PARA W10UI
-      # =========================
-      - name: Preparar updates
-        run: |
-          move D:\W10UI\update.msu D:\W10UI\
-
-      # =========================
-      # RODAR W10UI (💣 AGORA FUNCIONA)
+      # RODAR W10UI
       # =========================
       - name: Rodar W10UI
         run: |
@@ -116,7 +118,7 @@ jobs:
       # =========================
       # PEGAR ISO FINAL
       # =========================
-      - name: Detectar ISO final
+      - name: Detectar ISO
         run: |
           for %%i in (D:\W10UI\ISO\*.iso) do set FINAL=%%i
           echo FINAL=%FINAL%>>%GITHUB_ENV%
@@ -131,7 +133,7 @@ jobs:
       # =========================
       # UPLOAD
       # =========================
-      - name: Upload
+      - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ltsc-${{ github.run_number }}
