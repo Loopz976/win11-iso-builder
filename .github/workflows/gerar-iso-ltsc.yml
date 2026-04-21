@@ -1,4 +1,4 @@
-name: LTSC AUTO BUILD FINAL FIXED
+name: LTSC AUTO BUILD (UUP + DISM FINAL)
 
 on:
   workflow_dispatch:
@@ -17,6 +17,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    # =========================
+    # PREPARAR AMBIENTE
+    # =========================
     - name: Preparar ambiente
       run: |
         rmdir /s /q D:\ISO 2>nul
@@ -26,8 +29,25 @@ jobs:
         mkdir D:\Updates
         mkdir D:\Drivers
         mkdir D:\Final
+        mkdir D:\UUP
 
-    - name: Baixar ISO partes
+    # =========================
+    # INSTALAR DEPENDÊNCIAS
+    # =========================
+    - name: Instalar 7zip
+      run: |
+        choco install 7zip -y
+
+    - name: Baixar aria2
+      run: |
+        curl -L -o D:\aria2.zip https://github.com/aria2/aria2/releases/latest/download/aria2-1.37.0-win-64bit-build1.zip
+        7z x D:\aria2.zip -oD:\aria2
+        setx PATH "%PATH%;D:\aria2\aria2-1.37.0-win-64bit-build1"
+
+    # =========================
+    # ISO BASE
+    # =========================
+    - name: Baixar ISO base
       run: |
         curl -L -o D:\ISO\w10.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
         curl -L -o D:\ISO\w10.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
@@ -37,19 +57,47 @@ jobs:
       run: |
         7z x D:\ISO\w10.7z.001 -oD:\ISO\Extract
 
-    - name: Preparar install.wim
+    - name: Preparar WIM
       run: |
         copy D:\ISO\Extract\sources\install.wim D:\install.wim
 
-    - name: Mostrar indexes
+    # =========================
+    # UUP SCRIPT
+    # =========================
+    - name: Extrair UUP script
       run: |
-        dism /get-wiminfo /wimfile:D:\install.wim
+        7z x Updates.zip -oD:\UUP
 
-    - name: Baixar update
+    - name: Rodar UUP download
       run: |
-        curl -L -o D:\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
+        cd /d D:\UUP
+        uup_download_windows.cmd
 
-    - name: Baixar driver NVIDIA
+    # =========================
+    # MONTAR IMAGEM
+    # =========================
+    - name: Montar imagem
+      run: |
+        dism /mount-wim /wimfile:D:\install.wim /index:1 /mountdir:D:\Mount
+
+    - name: Reset pending
+      run: |
+        dism /image:D:\Mount /cleanup-image /revertpendingactions
+        dism /image:D:\Mount /cleanup-image /startcomponentcleanup
+
+    # =========================
+    # INTEGRAR UPDATES UUP
+    # =========================
+    - name: Integrar updates UUP
+      run: |
+        for /r D:\UUP %i in (*.cab) do (
+          dism /image:D:\Mount /add-package /packagepath:%i /ignorecheck
+        )
+
+    # =========================
+    # DRIVER NVIDIA
+    # =========================
+    - name: Baixar driver
       run: |
         curl -L -o D:\Drivers\driver.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
 
@@ -57,68 +105,35 @@ jobs:
       run: |
         7z x D:\Drivers\driver.zip -oD:\Drivers\Extract
 
-    # =========================
-    # MONTAGEM LIMPA
-    # =========================
-
-    - name: Montar imagem
-      run: |
-        dism /mount-wim /wimfile:D:\install.wim /index:1 /mountdir:D:\Mount
-
-    - name: Reset inicial (ANTI ERRO 0x800f0823)
-      run: |
-        dism /image:D:\Mount /cleanup-image /revertpendingactions
-        dism /image:D:\Mount /cleanup-image /startcomponentcleanup
-
-    # =========================
-    # UPDATE CORRETO
-    # =========================
-
-    - name: Extrair MSU
-      run: |
-        mkdir D:\Updates\Extract
-        expand -F:* D:\Updates\update.msu D:\Updates\Extract
-
-    - name: Instalar SSU primeiro (se existir)
-      run: |
-        for %i in (D:\Updates\Extract\*ssu*.cab) do (
-          dism /image:D:\Mount /add-package /packagepath:%i
-        )
-
-    - name: Instalar LCU (FORÇADO)
-      run: |
-        for %i in (D:\Updates\Extract\*.cab) do (
-          dism /image:D:\Mount /add-package /packagepath:%i /ignorecheck
-        )
-
-    # =========================
-    # DRIVERS + CLEAN
-    # =========================
-
-    - name: Integrar drivers
+    - name: Integrar driver
       run: |
         dism /image:D:\Mount /add-driver /driver:D:\Drivers\Extract /recurse
 
-    - name: Cleanup final (CRÍTICO)
+    # =========================
+    # CLEAN FINAL
+    # =========================
+    - name: Cleanup final
       run: |
         dism /image:D:\Mount /cleanup-image /startcomponentcleanup /resetbase
 
-    - name: Commit imagem
+    - name: Commit
       run: |
         dism /unmount-wim /mountdir:D:\Mount /commit
 
     # =========================
-    # ESD + ISO
+    # ESD MAX
     # =========================
-
-    - name: Converter para ESD (MAX)
+    - name: Converter ESD
       run: |
-        dism /export-image /sourceimagefile:D:\install.wim /sourceindex:1 /destinationimagefile:D:\ISO\Extract\sources\install.esd /compress:recovery /checkintegrity
+        dism /export-image /sourceimagefile:D:\install.wim /sourceindex:1 /destinationimagefile:D:\ISO\Extract\sources\install.esd /compress:recovery
 
     - name: Remover WIM
       run: |
         del D:\ISO\Extract\sources\install.wim
 
+    # =========================
+    # ISO FINAL
+    # =========================
     - name: Criar ISO
       run: |
         oscdimg -m -o -u2 -udfver102 D:\ISO\Extract D:\Final\LTSC_FINAL.iso
@@ -126,8 +141,7 @@ jobs:
     # =========================
     # RELEASE
     # =========================
-
-    - name: Upload Release
+    - name: Upload
       uses: softprops/action-gh-release@v1
       with:
         tag_name: build-${{ github.run_number }}
