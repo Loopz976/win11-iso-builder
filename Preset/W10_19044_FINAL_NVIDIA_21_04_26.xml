@@ -1,1 +1,207 @@
 
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Preset xmlns="urn:schemas-nliteos-com:pn.v1">
+	<Date>04/21/2026 02:48:23</Date>
+	<AppInfo>
+		<Version>2025.8.10552</Version>
+		<Licensed>Yes</Licensed>
+		<Protections>Yes</Protections>
+		<Host>Windows 10 IoTEnterpriseS 21H2 x64 - 10.0.19044.7184 (pt-BR)</Host>
+	</AppInfo>
+	<ImageInfo>
+		<Version mode="offline">Windows 10 EnterpriseS 21H2 x64 - 10.0.19044.1288 (pt-BR)</Version>
+		<GUID>{45143386-61E7-4B6C-BA5A-6FA6D55A668D}</GUID>
+	</ImageInfo>
+	<RemoveComponents AppRemovalMode="DISM"></RemoveComponents>
+	<Compatibility protectHidden="true">
+		<ComponentFeatures>
+			<Feature enabled="yes">Activation</Feature>
+			<Feature enabled="yes">Battle.net</Feature>
+			<Feature enabled="no">YubiKey</Feature>
+			<Feature enabled="no">Bluetooth</Feature>
+			<Feature enabled="no">CapFrameX</Feature>
+			<Feature enabled="yes">ManualSetup</Feature>
+			<Feature enabled="yes">USBCamera</Feature>
+			<Feature enabled="no">VSS</Feature>
+			<Feature enabled="no">NetworkDiscovery</Feature>
+			<Feature enabled="yes">Discord</Feature>
+			<Feature enabled="no">Recommended-Tablet</Feature>
+			<Feature enabled="no">Docker</Feature>
+			<Feature enabled="yes">EAC</Feature>
+			<Feature enabled="yes">HostRefresh</Feature>
+			<Feature enabled="no">SnippingTool</Feature>
+			<Feature enabled="yes">DefaultFonts</Feature>
+			<Feature enabled="no">AppGuard</Feature>
+			<Feature enabled="no">Hyper-V</Feature>
+			<Feature enabled="no">iCloud</Feature>
+			<Feature enabled="yes">WinSetup</Feature>
+			<Feature enabled="yes">Printing</Feature>
+			<Feature enabled="no">Kaspersky</Feature>
+			<Feature enabled="yes">WindowsStore</Feature>
+			<Feature enabled="yes">NightLight</Feature>
+			<Feature enabled="yes">OfficeSupport</Feature>
+			<Feature enabled="no">USBModem</Feature>
+			<Feature enabled="yes">Netflix</Feature>
+			<Feature enabled="yes">NvidiaSetup</Feature>
+			<Feature enabled="yes">OOBE</Feature>
+			<Feature enabled="yes">ShellSearchSupport</Feature>
+			<Feature enabled="yes">ServicingStack</Feature>
+			<Feature enabled="yes">Recommended-All</Feature>
+			<Feature enabled="no">SafeMode</Feature>
+			<Feature enabled="yes">VideoPlayback</Feature>
+			<Feature enabled="no">SamsungSwitch</Feature>
+			<Feature enabled="yes">Scanning</Feature>
+			<Feature enabled="yes">Spotify</Feature>
+			<Feature enabled="yes">AppxSupport</Feature>
+			<Feature enabled="yes">FileSharing</Feature>
+			<Feature enabled="no">VPN</Feature>
+			<Feature enabled="yes">TeamViewer</Feature>
+			<Feature enabled="yes">USB</Feature>
+			<Feature enabled="yes">SFC</Feature>
+			<Feature enabled="yes">VisualStudio</Feature>
+			<Feature enabled="yes">WindowsUpdate</Feature>
+			<Feature enabled="yes">WLAN</Feature>
+			<Feature enabled="no">RDPServer</Feature>
+		</ComponentFeatures>
+		<MachineDrivers>
+			<Machine enabled="no">Hyper-V VM</Machine>
+			<Machine enabled="yes">HostMachine</Machine>
+			<Machine enabled="no">Parallels VM</Machine>
+			<Machine enabled="no">Virtual Box VM</Machine>
+			<Machine enabled="no">VMware VM</Machine>
+		</MachineDrivers>
+	</Compatibility>
+	<Features></Features>
+	<Packages>
+		<Options>
+			<CleanHotfixedLeftovers>0</CleanHotfixedLeftovers>
+			<OptimizeAppX>false</OptimizeAppX>
+			<UpdateBootManager>false</UpdateBootManager>
+		</Options>
+		<File>C:\ProjetoNTlite\Updates\windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu</File>
+	</Packages>
+	<Commands>
+		<PostUpdates>
+			<!--<Command>cmd /c echo Example from [MOUNTDIR]\Windows &amp; pause</Command>-->
+			<!--<Command>dism /image:[MOUNTDIR] /get-intl</Command>-->
+		</PostUpdates>
+	</Commands>
+	<Drivers>
+		<Options>
+			<ReuseDriverCache>false</ReuseDriverCache>
+			<ShowHidden>true</ShowHidden>
+		</Options>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nv_dispi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvaai.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvaci.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvaei.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvaki.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvami.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvaoi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvari.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvbli.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvcti.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvcvi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\NVDDi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvdmi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\NVFMi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\NVFUi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvfxi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvgbdi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvgbi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\NVHDCi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvhmi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvivi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\NVJAi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvjwi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvlai.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvlbhi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\NVLEi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\NVLGi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvloi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\NVLTi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvmdi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\NVMIi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvmmi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\NVMOi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvmtci.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvmti.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\NVNDi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvpcdi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvpgi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvpmi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvqni.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvqui.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvrfi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvrzi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\NVSAi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvsmi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvspi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvszci.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvszni.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvszqi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvszwi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvtdi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvtfi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvtmi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvtnii.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvtqi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvtsi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvtwi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvvdi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvvidi.inf</File>
+		<File>C:\ProjetoNTlite\Drivers\NVIDIA\Display.Driver\nvwii.inf</File>
+	</Drivers>
+	<Unattended mode="0">
+		<AnswerFileLocationPanther>false</AnswerFileLocationPanther>
+		<AnswerFileLocationBoot>false</AnswerFileLocationBoot>
+		<SaveBothArch>false</SaveBothArch>
+		<EditionPrompt>false</EditionPrompt>
+		<settings pass="windowsPE">
+			<component name="Microsoft-Windows-Setup">
+				<DynamicUpdate>
+					<WillShowUI>OnError</WillShowUI>
+				</DynamicUpdate>
+				<ImageInstall>
+					<OSImage>
+						<WillShowUI>OnError</WillShowUI>
+						<InstallFrom>
+							<MetaData>
+								<Key>/IMAGE/INDEX</Key>
+								<Value>1</Value>
+							</MetaData>
+						</InstallFrom>
+					</OSImage>
+				</ImageInstall>
+			</component>
+		</settings>
+	</Unattended>
+	<Tweaks>
+		<Settings>
+			<TweakGroup name="PowerAndShutdown">
+				<Tweak name="Power\HiberbootEnabled">0</Tweak>
+				<Tweak name="FlyoutMenuSettings\ShowHibernateOption">1</Tweak>
+			</TweakGroup>
+		</Settings>
+		<Services></Services>
+		<ExtraServices></ExtraServices>
+		<ScheduledTasks></ScheduledTasks>
+	</Tweaks>
+	<ApplyOptions>
+		<ImageTasks>
+			<Task>imageSaveRebuild</Task>
+			<Task>imageFormatEsd</Task>
+			<Task exclusiveOnly="true">imageOptionsCreateIso</Task>
+			<Task>imageOptionsSkipPrompt</Task>
+		</ImageTasks>
+		<AutoIsoFile>D:\NTLite.iso</AutoIsoFile>
+		<AutoIsoLabel>NTLite</AutoIsoLabel>
+		<AutoSplitSize>4000</AutoSplitSize>
+	</ApplyOptions>
+	<Execution BeforeLogonMode="0">
+		<Remove></Remove>
+		<Change></Change>
+		<Add></Add>
+	</Execution>
+	<Registry></Registry>
+</Preset>
