@@ -6,41 +6,40 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 360
 
     steps:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Install tools
+    - name: Install Tools
       run: |
-        choco install 7zip aria2 -y
+        choco install 7zip -y
+        choco install oscdimg -y
 
     # =========================
-    # DOWNLOAD ISO (ROBUSTO)
+    # BAIXAR ISO
     # =========================
-    - name: Download ISO Parts (ARIA2)
-      shell: cmd
+    - name: Download ISO Parts
+      shell: powershell
       run: |
-        mkdir ISO
+        New-Item -ItemType Directory ISO
+
         cd ISO
 
-        aria2c -x 16 -s 16 -k 1M ^
-        https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001 ^
-        https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002 ^
-        https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
+        curl -L -o base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
+        curl -L -o base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
+        curl -L -o base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
 
     # =========================
     # EXTRAIR ISO
     # =========================
     - name: Extract ISO
-      shell: cmd
       run: |
         cd ISO
-        7z x Win10LTSC21H2Base.7z.001 -oISO_EXTRACTED -y
+        7z x base.7z.001 -oISO_EXTRACTED -y
 
     # =========================
-    # BAIXAR NTLITE PROJECT
+    # BAIXAR PROJETO NTLITE
     # =========================
     - name: Download ProjetoNTLite
       run: |
@@ -51,89 +50,53 @@ jobs:
         7z x ProjetoNTLite.zip -oProjetoNTLite -y
 
     # =========================
-    # EXTRAIR PRESET.ZIP DO REPO
+    # DEBUG ESTRUTURA
     # =========================
-    - name: Extract Preset
+    - name: Debug Files
       run: |
-        7z x Preset.zip -oPreset -y
+        echo ===== ISO =====
+        dir ISO\ISO_EXTRACTED
+
+        echo ===== NTLITE =====
+        dir ProjetoNTLite
 
     # =========================
-    # AUTO DETECT XML
+    # RODAR NTLITE CORRETO
     # =========================
-    - name: Detect XML Preset
+    - name: Run NTLite
       shell: powershell
       run: |
-        $xml = Get-ChildItem "Preset" -Filter *.xml -Recurse | Select-Object -First 1
+        $ntlite = "$PWD\ProjetoNTLite\NTLite\NTLite.exe"
+        $preset = "$PWD\ProjetoNTLite\Preset\W10_19044_FINAL_NVIDIA_21_04_26.xml"
+        $source = "$PWD\ISO\ISO_EXTRACTED"
+        $log = "$PWD\ntlite.log"
 
-        if (!$xml) {
-          throw "Nenhum XML encontrado"
-        }
+        Write-Host "NTLite Path: $ntlite"
+        Write-Host "Preset: $preset"
+        Write-Host "Source: $source"
 
-        echo "XML encontrado: $($xml.FullName)"
-        echo "XML_PATH=$($xml.FullName)" >> $env:GITHUB_ENV
+        Start-Process $ntlite `
+          -ArgumentList "/silent /source:$source /load:$preset /apply /exit /log:$log" `
+          -Wait -NoNewWindow
 
-    # =========================
-    # RODAR NTLITE (TEMPO REAL)
-    # =========================
-    - name: Run NTLite (REALTIME LOG)
-      shell: powershell
-      run: |
-        $exe = "ProjetoNTLite\NTLite\NTLite.exe"
-
-        if (!(Test-Path $exe)) {
-          throw "NTLite não encontrado"
-        }
-
-        Write-Host "Iniciando NTLite..."
-        Write-Host "Preset: $env:XML_PATH"
-
-        $process = Start-Process $exe `
-          -ArgumentList "/silent /load:`"$env:XML_PATH`" /apply /exit /log:ntlite.log" `
-          -PassThru
-
-        Start-Sleep -Seconds 10
-
-        if ($process.HasExited) {
-          Write-Host "NTLite fechou cedo (erro)"
-          if (Test-Path "ntlite.log") {
-            Get-Content ntlite.log -Tail 200
-          }
-          throw "Falha ao iniciar NTLite"
-        }
-
-        Write-Host "NTLite rodando..."
-
-        while (!$process.HasExited) {
-          Start-Sleep -Seconds 15
-
-          if (Test-Path "ntlite.log") {
-            Write-Host "===== LOG AO VIVO ====="
-            Get-Content ntlite.log -Tail 25
-          } else {
-            Write-Host "Aguardando log..."
-          }
-        }
-
-        Write-Host "NTLite finalizado"
-
-        if (Test-Path "ntlite.log") {
-          Write-Host "===== LOG FINAL ====="
-          Get-Content ntlite.log -Tail 200
-        } else {
-          throw "NTLite não gerou log"
-        }
+        Write-Host "==== LOG ===="
+        Get-Content $log -Tail 200
 
     # =========================
     # CRIAR ISO
     # =========================
     - name: Create ISO
-      shell: cmd
       run: |
         mkdir FINAL
-        oscdimg -bISO\ISO_EXTRACTED\boot\etfsboot.com -u2 -h -m -o -lWIN10_CUSTOM ISO\ISO_EXTRACTED FINAL\Win10_CUSTOM.iso
+
+        oscdimg -bISO\ISO_EXTRACTED\boot\etfsboot.com `
+        -u2 -h -m -o `
+        -lWIN10_CUSTOM `
+        ISO\ISO_EXTRACTED `
+        FINAL\Win10_CUSTOM.iso
 
     # =========================
-    # SPLIT ISO
+    # SPLIT
     # =========================
     - name: Split ISO
       run: |
@@ -146,7 +109,6 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: build-${{ github.run_number }}
-        name: Win10 Custom Build
         files: FINAL\*.7z*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
