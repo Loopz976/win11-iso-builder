@@ -1,4 +1,4 @@
-name: LTSC FINAL BUILD STABLE
+name: LTSC AUTO BUILD FINAL
 
 on:
   workflow_dispatch:
@@ -15,139 +15,89 @@ jobs:
         shell: cmd
 
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      # =========================
-      # PREPARAR
-      # =========================
-      - name: Preparar ambiente
-        run: |
-          if exist D:\ISO rmdir /s /q D:\ISO
-          mkdir D:\ISO
-          mkdir D:\ISO\DVD
-          mkdir D:\ISO\MOUNT
-          mkdir D:\ISO\UPDATES
-          mkdir D:\ISO\DRIVERS
+    - name: Preparar ambiente
+      run: |
+        if exist D:\ISO rmdir /s /q D:\ISO
+        mkdir D:\ISO
+        mkdir D:\ISO\Extract
+        mkdir D:\Mount
+        mkdir D:\Updates
+        mkdir D:\Drivers
+        mkdir D:\Final
 
-      # =========================
-      # BAIXAR ISO BASE
-      # =========================
-      - name: Baixar ISO
-        run: |
-          curl -L -o D:\ISO\base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
-          curl -L -o D:\ISO\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
-          curl -L -o D:\ISO\base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
+    - name: Baixar ISO partes
+      run: |
+        curl -L -o D:\ISO\w10.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
+        curl -L -o D:\ISO\w10.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
+        curl -L -o D:\ISO\w10.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
-      - name: Extrair ISO
-        run: |
-          7z x D:\ISO\base.7z.001 -oD:\ISO -y
-          for %%i in (D:\ISO\*.iso) do 7z x "%%i" -oD:\ISO\DVD -y
+    - name: Extrair ISO
+      run: |
+        7z x D:\ISO\w10.7z.001 -oD:\ISO\Extract
 
-      # =========================
-      # PREPARAR WIM
-      # =========================
-      - name: Copiar WIM
-        run: |
-          copy D:\ISO\DVD\sources\install.wim D:\ISO\install.wim
+    - name: Preparar install.wim
+      run: |
+        copy D:\ISO\Extract\sources\install.wim D:\install.wim
 
-      # =========================
-      # BAIXAR UPDATE
-      # =========================
-      - name: Baixar update
-        run: |
-          curl -L -o D:\ISO\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
+    - name: Baixar update
+      run: |
+        curl -L -o D:\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
-      # =========================
-      # EXTRAIR MSU (CRÍTICO)
-      # =========================
-      - name: Extrair MSU
-        run: |
-          expand -F:* D:\ISO\update.msu D:\ISO\UPDATES
+    - name: Baixar driver NVIDIA
+      run: |
+        curl -L -o D:\Drivers\driver.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
 
-      # =========================
-      # MONTAR IMAGEM
-      # =========================
-      - name: Mount WIM
-        run: |
-          dism /Mount-Wim /WimFile:D:\ISO\install.wim /index:1 /MountDir:D:\ISO\MOUNT
+    - name: Extrair driver
+      run: |
+        7z x D:\Drivers\driver.zip -oD:\Drivers\Extract
 
-      # =========================
-      # APLICAR CABs
-      # =========================
-      - name: Integrar CABs
-        run: |
-          for %%i in (D:\ISO\UPDATES\*.cab) do (
-            dism /Image:D:\ISO\MOUNT /Add-Package /PackagePath:"%%i"
-          )
+    - name: Montar imagem
+      run: |
+        dism /mount-wim /wimfile:D:\install.wim /index:1 /mountdir:D:\Mount
 
-      # =========================
-      # DRIVERS
-      # =========================
-      - name: Drivers NVIDIA
-        run: |
-          curl -L -o D:\ISO\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
-          7z x D:\ISO\nvidia.zip -oD:\ISO\DRIVERS -y
-          dism /Image:D:\ISO\MOUNT /Add-Driver /Driver:D:\ISO\DRIVERS /Recurse
+    - name: Limpar pendencias
+      run: |
+        dism /image:D:\Mount /cleanup-image /revertpendingactions
 
-      # =========================
-      # LIMPEZA PROFUNDA
-      # =========================
-      - name: Cleanup
-        run: |
-          dism /Image:D:\ISO\MOUNT /Cleanup-Image /StartComponentCleanup /ResetBase
+    - name: Extrair MSU
+      run: |
+        mkdir D:\Updates\Extract
+        expand -F:* D:\Updates\update.msu D:\Updates\Extract
 
-      # =========================
-      # COMMIT
-      # =========================
-      - name: Commit
-        run: |
-          dism /Unmount-Wim /MountDir:D:\ISO\MOUNT /Commit
+    - name: Integrar update
+      run: |
+        for %i in (D:\Updates\Extract\*.cab) do dism /image:D:\Mount /add-package /packagepath:%i
 
-      # =========================
-      # WIMLIB (COMPRESSÃO MÁXIMA)
-      # =========================
-      - name: Baixar wimlib
-        run: |
-          curl -L -o D:\wimlib.zip https://wimlib.net/downloads/wimlib-1.14.4-windows-x86_64-bin.zip
-          7z x D:\wimlib.zip -oD:\wimlib -y
+    - name: Integrar drivers
+      run: |
+        dism /image:D:\Mount /add-driver /driver:D:\Drivers\Extract /recurse
 
-      - name: Converter ESD MAX
-        run: |
-          D:\wimlib\wimlib-imagex.exe export D:\ISO\install.wim all D:\ISO\DVD\sources\install.esd --compress=LZMS --solid
-          del D:\ISO\DVD\sources\install.wim
+    - name: Cleanup total
+      run: |
+        dism /image:D:\Mount /cleanup-image /startcomponentcleanup /resetbase
 
-      # =========================
-      # BAIXAR OSCDIMG
-      # =========================
-      - name: Baixar oscdimg
-        run: |
-          curl -L -o D:\oscdimg.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/tools/oscdimg.zip
-          7z x D:\oscdimg.zip -oD:\oscdimg -y
+    - name: Commit imagem
+      run: |
+        dism /unmount-wim /mountdir:D:\Mount /commit
 
-      # =========================
-      # GERAR ISO FINAL
-      # =========================
-      - name: Criar ISO
-        run: |
-          D:\oscdimg\oscdimg.exe -m -o -u2 -udfver102 ^
-          -bootdata:2#p0,e,bD:\ISO\DVD\boot\etfsboot.com#pEF,e,bD:\ISO\DVD\efi\microsoft\boot\efisys.bin ^
-          D:\ISO\DVD D:\ISO\LTSC_FINAL.iso
+    - name: Converter para ESD
+      run: |
+        dism /export-image /sourceimagefile:D:\install.wim /sourceindex:1 /destinationimagefile:D:\ISO\Extract\sources\install.esd /compress:recovery /checkintegrity
 
-      # =========================
-      # COMPACTAR
-      # =========================
-      - name: Compactar
-        run: |
-          7z a -t7z -mx=9 -v1900m D:\ISO\FINAL.7z D:\ISO\LTSC_FINAL.iso
+    - name: Remover WIM
+      run: |
+        del D:\ISO\Extract\sources\install.wim
 
-      # =========================
-      # UPLOAD
-      # =========================
-      - name: Upload
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: build-${{ github.run_number }}
-          name: LTSC FINAL
-          files: D:\ISO\FINAL.7z*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Criar ISO
+      run: |
+        oscdimg -m -o -u2 -udfver102 D:\ISO\Extract D:\Final\LTSC_FINAL.iso
+
+    - name: Upload Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: build-${{ github.run_number }}
+        files: D:\Final\LTSC_FINAL.iso
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
