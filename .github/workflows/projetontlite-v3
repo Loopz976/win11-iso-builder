@@ -1,0 +1,152 @@
+name: Build Windows ISO
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install tools
+      run: |
+        choco install 7zip aria2 -y
+
+    # =========================
+    # DOWNLOAD ISO (ROBUSTO)
+    # =========================
+    - name: Download ISO Parts (ARIA2)
+      shell: cmd
+      run: |
+        mkdir ISO
+        cd ISO
+
+        aria2c -x 16 -s 16 -k 1M ^
+        https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001 ^
+        https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002 ^
+        https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
+
+    # =========================
+    # EXTRAIR ISO
+    # =========================
+    - name: Extract ISO
+      shell: cmd
+      run: |
+        cd ISO
+        7z x Win10LTSC21H2Base.7z.001 -oISO_EXTRACTED -y
+
+    # =========================
+    # BAIXAR NTLITE PROJECT
+    # =========================
+    - name: Download ProjetoNTLite
+      run: |
+        curl -L -o ProjetoNTLite.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/projetontlite/ProjetoNTlite.zip
+
+    - name: Extract ProjetoNTLite
+      run: |
+        7z x ProjetoNTLite.zip -oProjetoNTLite -y
+
+    # =========================
+    # EXTRAIR PRESET.ZIP DO REPO
+    # =========================
+    - name: Extract Preset
+      run: |
+        7z x Preset.zip -oPreset -y
+
+    # =========================
+    # AUTO DETECT XML
+    # =========================
+    - name: Detect XML Preset
+      shell: powershell
+      run: |
+        $xml = Get-ChildItem "Preset" -Filter *.xml -Recurse | Select-Object -First 1
+
+        if (!$xml) {
+          throw "Nenhum XML encontrado"
+        }
+
+        echo "XML encontrado: $($xml.FullName)"
+        echo "XML_PATH=$($xml.FullName)" >> $env:GITHUB_ENV
+
+    # =========================
+    # RODAR NTLITE (TEMPO REAL)
+    # =========================
+    - name: Run NTLite (REALTIME LOG)
+      shell: powershell
+      run: |
+        $exe = "ProjetoNTLite\NTLite\NTLite.exe"
+
+        if (!(Test-Path $exe)) {
+          throw "NTLite não encontrado"
+        }
+
+        Write-Host "Iniciando NTLite..."
+        Write-Host "Preset: $env:XML_PATH"
+
+        $process = Start-Process $exe `
+          -ArgumentList "/silent /load:`"$env:XML_PATH`" /apply /exit /log:ntlite.log" `
+          -PassThru
+
+        Start-Sleep -Seconds 10
+
+        if ($process.HasExited) {
+          Write-Host "NTLite fechou cedo (erro)"
+          if (Test-Path "ntlite.log") {
+            Get-Content ntlite.log -Tail 200
+          }
+          throw "Falha ao iniciar NTLite"
+        }
+
+        Write-Host "NTLite rodando..."
+
+        while (!$process.HasExited) {
+          Start-Sleep -Seconds 15
+
+          if (Test-Path "ntlite.log") {
+            Write-Host "===== LOG AO VIVO ====="
+            Get-Content ntlite.log -Tail 25
+          } else {
+            Write-Host "Aguardando log..."
+          }
+        }
+
+        Write-Host "NTLite finalizado"
+
+        if (Test-Path "ntlite.log") {
+          Write-Host "===== LOG FINAL ====="
+          Get-Content ntlite.log -Tail 200
+        } else {
+          throw "NTLite não gerou log"
+        }
+
+    # =========================
+    # CRIAR ISO
+    # =========================
+    - name: Create ISO
+      shell: cmd
+      run: |
+        mkdir FINAL
+        oscdimg -bISO\ISO_EXTRACTED\boot\etfsboot.com -u2 -h -m -o -lWIN10_CUSTOM ISO\ISO_EXTRACTED FINAL\Win10_CUSTOM.iso
+
+    # =========================
+    # SPLIT ISO
+    # =========================
+    - name: Split ISO
+      run: |
+        7z a -v1900m FINAL\Win10_CUSTOM.7z FINAL\Win10_CUSTOM.iso
+
+    # =========================
+    # UPLOAD
+    # =========================
+    - name: Upload Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: build-${{ github.run_number }}
+        name: Win10 Custom Build
+        files: FINAL\*.7z*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
