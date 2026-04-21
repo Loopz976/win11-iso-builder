@@ -1,4 +1,4 @@
-name: LTSC AUTO BUILD FINAL VERSIONED
+name: Gerar ISO Windows 10 LTSC (W10UI FINAL)
 
 on:
   workflow_dispatch:
@@ -12,137 +12,138 @@ jobs:
         shell: cmd
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Preparar ambiente
+      - name: Criar estrutura limpa
         run: |
           if exist D:\Files rmdir /s /q D:\Files
           mkdir D:\Files
-          mkdir D:\Files\ISO
-          mkdir D:\Files\DVD
-          mkdir D:\Files\MOUNT
-          mkdir D:\Files\Updates
-          mkdir D:\Files\Updates\extracted
-          mkdir D:\Files\Drivers
+          mkdir D:\Files\Drivers\OS
 
-      # ISO
-      - name: Baixar ISO
+      # =========================
+      # DOWNLOAD ISO (MULTIPART)
+      # =========================
+      - name: Baixar ISO (3 partes)
         run: |
           curl -L -o D:\Files\base.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.001
           curl -L -o D:\Files\base.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.002
           curl -L -o D:\Files\base.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc-2021-24459629943/W10LTSC2021.7z.003
 
-      - name: Extrair ISO
+      - name: Validar partes
+        run: |
+          if not exist D:\Files\base.7z.001 exit /b 1
+          if not exist D:\Files\base.7z.002 exit /b 1
+          if not exist D:\Files\base.7z.003 exit /b 1
+
+      - name: Testar integridade
+        run: |
+          7z t D:\Files\base.7z.001
+
+      - name: Extrair pacote
         run: |
           7z x D:\Files\base.7z.001 -oD:\Files\ISO -y
 
-      - name: Mover ISO
+      # =========================
+      # LOCALIZAR ISO REAL
+      # =========================
+      - name: Encontrar ISO original
         run: |
-          for /r D:\Files\ISO %%i in (*.iso) do move "%%i" D:\Files\
+          set FOUND=0
 
-      - name: Extrair ISO COMPLETA
-        run: |
-          for %%i in (D:\Files\*.iso) do (
-            7z x "%%i" -oD:\Files\DVD -y
+          for /r D:\Files\ISO %%i in (*.iso) do (
+              echo ISO encontrada: %%i
+              move "%%i" D:\Files\
+              set FOUND=1
           )
 
+          if %FOUND%==0 (
+              echo ERRO: ISO nao encontrada dentro do pacote
+              exit /b 1
+          )
+
+      - name: Validar ISO
+        run: |
+          dir D:\Files\*.iso || exit /b 1
+
+      # =========================
       # UPDATE
-      - name: Baixar update
+      # =========================
+      - name: Baixar Update
         run: |
-          curl -L -o D:\Files\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
+          curl -L -o D:\Files\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
-      - name: Extrair MSU
-        run: |
-          expand -F:* D:\Files\Updates\update.msu D:\Files\Updates\extracted
-
-      # DRIVER
-      - name: Baixar driver NVIDIA
+      # =========================
+      # DRIVER NVIDIA
+      # =========================
+      - name: Baixar Driver
         run: |
           curl -L -o D:\Files\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
 
-      - name: Extrair driver
+      - name: Extrair Driver
         run: |
-          7z x D:\Files\nvidia.zip -oD:\Files\Drivers -y
+          7z x D:\Files\nvidia.zip -oD:\Files\Drivers\OS -y
 
-      # MOUNT
-      - name: Montar imagem
+      # =========================
+      # W10UI
+      # =========================
+      - name: Extrair W10UI
         run: |
-          dism /Mount-Wim /WimFile:D:\Files\DVD\sources\install.wim /index:1 /MountDir:D:\Files\MOUNT
+          7z x W10UI_10.59b.zip -oD:\Files -y
 
-      - name: Preparar imagem
+      # =========================
+      # CONFIG
+      # =========================
+      - name: Criar W10UI.ini
         run: |
-          dism /Image:D:\Files\MOUNT /Cleanup-Image /StartComponentCleanup
+          (
+          echo [W10UI]
+          echo AutoStart=1
+          echo AddUpdates=1
+          echo Cleanup=1
+          echo ResetBase=1
+          echo Drivers=1
+          echo Rebuild=1
+          echo wim2esd=1
+          echo esdcompress=4
+          echo ISO=1
+          ) > D:\Files\W10UI.ini
 
-      # SSU
-      - name: Integrar SSU
+      # =========================
+      # EXECUÃ‡ÃƒO
+      # =========================
+      - name: Rodar W10UI
         run: |
-          for %%i in (D:\Files\Updates\extracted\*SSU*.cab) do (
-            dism /Image:D:\Files\MOUNT /Add-Package /PackagePath:"%%i"
-          )
+          cd /d D:\Files
+          call W10UI.cmd
 
-      # LCU
-      - name: Integrar LCU
+      # =========================
+      # ISO FINAL
+      # =========================
+      - name: Detectar ISO final
         run: |
-          for %%i in (D:\Files\Updates\extracted\*.cab) do (
-            dism /Image:D:\Files\MOUNT /Add-Package /PackagePath:"%%i"
-          )
+          for %%i in (D:\Files\*.iso) do set FINALISO=%%i
+          echo FINALISO=%FINALISO% >> %GITHUB_ENV%
 
-      # DRIVERS
-      - name: Integrar drivers
+      - name: Validar ISO final
         run: |
-          dism /Image:D:\Files\MOUNT /Add-Driver /Driver:D:\Files\Drivers /Recurse
+          if not exist %FINALISO% exit /b 1
 
-      # NETFX
-      - name: Ativar .NET 3.5
-        run: |
-          dism /Image:D:\Files\MOUNT /Enable-Feature /FeatureName:NetFx3 /All /Source:D:\Files\DVD\sources\sxs /LimitAccess
-
-      # CLEAN FINAL
-      - name: Cleanup final
-        run: |
-          dism /Image:D:\Files\MOUNT /Cleanup-Image /StartComponentCleanup /ResetBase
-
-      # 💣 PEGAR VERSÃO
-      - name: Detectar versão real
-        run: |
-          reg load HKLM\OFFLINE D:\Files\MOUNT\Windows\System32\Config\SOFTWARE
-          for /f "tokens=3" %%a in ('reg query "HKLM\OFFLINE\Microsoft\Windows NT\CurrentVersion" /v CurrentBuild ^| find "REG_SZ"') do set BUILD=%%a
-          for /f "tokens=3" %%a in ('reg query "HKLM\OFFLINE\Microsoft\Windows NT\CurrentVersion" /v UBR ^| find "REG_DWORD"') do set UBR=%%a
-          set UBR=%UBR:~2%
-          set VERSION=%BUILD%.%UBR%
-          echo VERSION=%VERSION%>>%GITHUB_ENV%
-          reg unload HKLM\OFFLINE
-
-      # COMMIT
-      - name: Commit imagem
-        run: |
-          dism /Unmount-Wim /MountDir:D:\Files\MOUNT /Commit
-
-      # ESD
-      - name: Converter para ESD
-        run: |
-          dism /Export-Image /SourceImageFile:D:\Files\DVD\sources\install.wim /SourceIndex:1 /DestinationImageFile:D:\Files\DVD\sources\install.esd /Compress:recovery
-
-      - name: Remover WIM
-        run: |
-          del D:\Files\DVD\sources\install.wim
-
-      # ISO COM NOME DINÂMICO
-      - name: Criar ISO
-        run: |
-          oscdimg -m -o -u2 -udfver102 D:\Files\DVD D:\Files\%VERSION%_WIN10_LTSC_ATUALIZADO.iso
-
-      # ZIP
+      # =========================
+      # COMPRESSÃƒO
+      # =========================
       - name: Compactar ISO
         run: |
-          7z a -t7z -mx=9 -v1900m D:\Files\%VERSION%_WIN10_LTSC_ATUALIZADO.7z D:\Files\%VERSION%_WIN10_LTSC_ATUALIZADO.iso
+          7z a -t7z -mx=9 -v1900m D:\Files\LTSC_FINAL.7z %FINALISO%
 
-      # UPLOAD
+      # =========================
+      # RELEASE
+      # =========================
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ltsc-${{ env.VERSION }}
-          name: LTSC ${{ env.VERSION }}
-          files: D:\Files\*_WIN10_LTSC_ATUALIZADO.7z*
+          tag_name: ltsc-${{ github.run_number }}
+          name: LTSC Build ${{ github.run_number }}
+          files: D:\Files\LTSC_FINAL.7z*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
