@@ -1,4 +1,4 @@
-name: LTSC AUTO BUILD (UUP + DISM FINAL)
+name: LTSC AUTO BUILD (FINAL REAL)
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ jobs:
     - uses: actions/checkout@v4
 
     # =========================
-    # PREPARAR AMBIENTE
+    # PREPARAR
     # =========================
     - name: Preparar ambiente
       run: |
@@ -26,23 +26,24 @@ jobs:
         mkdir D:\ISO
         mkdir D:\ISO\Extract
         mkdir D:\Mount
-        mkdir D:\Updates
         mkdir D:\Drivers
         mkdir D:\Final
         mkdir D:\UUP
+        mkdir D:\BIN
 
     # =========================
-    # INSTALAR DEPENDÊNCIAS
+    # 7ZIP + ARIA2C.EXE
     # =========================
-    - name: Instalar 7zip
+    - name: Instalar dependencias
       run: |
         choco install 7zip -y
 
-    - name: Baixar aria2
-      run: |
-        curl -L -o D:\aria2.zip https://github.com/aria2/aria2/releases/latest/download/aria2-1.37.0-win-64bit-build1.zip
-        7z x D:\aria2.zip -oD:\aria2
-        setx PATH "%PATH%;D:\aria2\aria2-1.37.0-win-64bit-build1"
+        echo Baixando aria2c...
+        curl -L -o D:\BIN\aria2.zip https://github.com/aria2/aria2/releases/latest/download/aria2-1.37.0-win-64bit-build1.zip
+
+        7z x D:\BIN\aria2.zip -oD:\BIN\aria2
+
+        copy D:\BIN\aria2\aria2-1.37.0-win-64bit-build1\aria2c.exe D:\BIN\aria2c.exe
 
     # =========================
     # ISO BASE
@@ -64,14 +65,21 @@ jobs:
     # =========================
     # UUP SCRIPT
     # =========================
-    - name: Extrair UUP script
+    - name: Extrair UUP
       run: |
         7z x Updates.zip -oD:\UUP
 
-    - name: Rodar UUP download
+    - name: Rodar UUP (ARIA2 OK)
       run: |
         cd /d D:\UUP
-        uup_download_windows.cmd
+
+        set PATH=D:\BIN;%PATH%
+
+        echo Verificando aria2c...
+        aria2c -v
+
+        echo Rodando script UUP...
+        call uup_download_windows.cmd
 
     # =========================
     # MONTAR IMAGEM
@@ -86,11 +94,12 @@ jobs:
         dism /image:D:\Mount /cleanup-image /startcomponentcleanup
 
     # =========================
-    # INTEGRAR UPDATES UUP
+    # INTEGRAR UPDATES (CAB)
     # =========================
     - name: Integrar updates UUP
       run: |
         for /r D:\UUP %i in (*.cab) do (
+          echo Instalando %i
           dism /image:D:\Mount /add-package /packagepath:%i /ignorecheck
         )
 
@@ -123,7 +132,7 @@ jobs:
     # =========================
     # ESD MAX
     # =========================
-    - name: Converter ESD
+    - name: Converter para ESD (MAX)
       run: |
         dism /export-image /sourceimagefile:D:\install.wim /sourceindex:1 /destinationimagefile:D:\ISO\Extract\sources\install.esd /compress:recovery
 
@@ -139,9 +148,9 @@ jobs:
         oscdimg -m -o -u2 -udfver102 D:\ISO\Extract D:\Final\LTSC_FINAL.iso
 
     # =========================
-    # RELEASE
+    # UPLOAD RELEASE
     # =========================
-    - name: Upload
+    - name: Upload ISO
       uses: softprops/action-gh-release@v1
       with:
         tag_name: build-${{ github.run_number }}
