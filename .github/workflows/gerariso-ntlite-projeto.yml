@@ -1,4 +1,4 @@
-name: Build ISO NTLite
+name: Build Windows ISO
 
 on:
   workflow_dispatch:
@@ -8,77 +8,81 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      # =========================
-      # Download ISO (3 partes)
-      # =========================
-      - name: Download ISO Parts
-        run: |
-          New-Item -ItemType Directory -Path ISO
-          Set-Location ISO
-          curl -L -o Win10.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
-          curl -L -o Win10.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
-          curl -L -o Win10.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
+    - name: Install 7zip
+      run: choco install 7zip -y
 
-      # =========================
-      # Extract ISO (FIX POWERHELL)
-      # =========================
-      - name: Extract ISO
-        run: |
-          Set-Location ISO
-          7z x Win10.7z.001 -y
+    # =========================
+    # BAIXAR ISO (3 PARTES)
+    # =========================
+    - name: Download ISO Parts
+      run: |
+        mkdir ISO
+        cd ISO
+        curl -L -o part1.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
+        curl -L -o part1.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
+        curl -L -o part1.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
 
-          New-Item -ItemType Directory -Path ../ISO_EXTRACTED -Force
+    # =========================
+    # EXTRAIR ISO
+    # =========================
+    - name: Extract ISO
+      shell: cmd
+      run: |
+        cd ISO
+        7z x part1.7z.001 -oISO_EXTRACTED -y
 
-          Get-ChildItem -Filter *.iso | ForEach-Object {
-            7z x $_.FullName -o"../ISO_EXTRACTED" -y
-          }
+    # =========================
+    # BAIXAR PROJETO NTLITE
+    # =========================
+    - name: Download ProjetoNTLite
+      run: |
+        curl -L -o ProjetoNTLite.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/projetontlite/ProjetoNTlite.zip
 
-      # =========================
-      # Download ProjetoNTLite
-      # =========================
-      - name: Download ProjetoNTLite
-        run: |
-          curl -L -o ProjetoNTLite.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/projetontlite/ProjetoNTlite.zip
+    - name: Extract ProjetoNTLite
+      run: |
+        7z x ProjetoNTLite.zip -oProjetoNTLite -y
 
-      - name: Extract ProjetoNTLite
-        run: |
-          7z x ProjetoNTLite.zip -oProjetoNTLite -y
+    # =========================
+    # RODAR NTLITE (CORRIGIDO)
+    # =========================
+    - name: Run NTLite (Silent + Log)
+      shell: powershell
+      run: |
+        $log = "ntlite.log"
 
-      # =========================
-      # Run NTLite (FIX ARGUMENTO)
-      # =========================
-      - name: Run NTLite
-        run: |
-          Start-Process "ProjetoNTLite\NTLite\NTLite.exe" `
-            -ArgumentList '/silent','/image:ISO_EXTRACTED','/preset:Preset\W10_19044_FINAL_NVIDIA_21_04_26.xml','/apply','/save','/exit' `
-            -Wait
+        Start-Process "ProjetoNTLite\NTLite\NTLite.exe" `
+          -ArgumentList "/silent /load:Preset\W10_19044_FINAL_NVIDIA_21_04_26.xml /apply /exit /log:$log" `
+          -Wait
 
-      # =========================
-      # Create ISO
-      # =========================
-      - name: Create ISO
-        run: |
-          oscdimg -bISO_EXTRACTED\boot\etfsboot.com -u2 -h -m -o ISO_EXTRACTED Win10LTSC_21.04.2026_NTLite_Actions.iso
+        echo "==== LOG NTLITE ===="
+        Get-Content $log -Tail 200
 
-      # =========================
-      # Split 1900MB
-      # =========================
-      - name: Split ISO
-        run: |
-          7z a -v1900m Win10LTSC_21.04.2026_NTLite_Actions.7z Win10LTSC_21.04.2026_NTLite_Actions.iso
+    # =========================
+    # CRIAR ISO
+    # =========================
+    - name: Create ISO
+      run: |
+        mkdir FINAL
+        oscdimg -bISO\ISO_EXTRACTED\boot\etfsboot.com -u2 -h -m -o -lWIN10_CUSTOM ISO\ISO_EXTRACTED FINAL\Win10LTSC_21.04.2026_ntlite_actions.iso
 
-      # =========================
-      # Upload Release
-      # =========================
-      - name: Upload Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: build-ntlite
-          name: Win10LTSC 21.04.2026 NTLite Actions
-          files: |
-            Win10LTSC_21.04.2026_NTLite_Actions.7z.*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    # =========================
+    # SPLIT ISO 1900MB
+    # =========================
+    - name: Split ISO
+      run: |
+        7z a -v1900m FINAL\Win10LTSC_21.04.2026_ntlite_actions.7z FINAL\Win10LTSC_21.04.2026_ntlite_actions.iso
+
+    # =========================
+    # UPLOAD RELEASE
+    # =========================
+    - name: Upload Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: build-${{ github.run_number }}
+        name: Win10LTSC 21.04.2026 ntlite actions
+        files: FINAL\*.7z*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
