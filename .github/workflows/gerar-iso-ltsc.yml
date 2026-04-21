@@ -28,7 +28,7 @@ jobs:
           mkdir D:\W10UI\Updates
 
       # =========================
-      # EXTRAIR W10UI DO REPO
+      # EXTRAIR W10UI (ZIP DO REPO)
       # =========================
       - name: Extrair W10UI
         run: |
@@ -62,14 +62,14 @@ jobs:
           copy D:\W10UI\DVD\sources\install.wim D:\W10UI\install.wim
 
       # =========================
-      # BAIXAR UPDATE
+      # BAIXAR UPDATE (PASTA CORRETA)
       # =========================
       - name: Baixar update
         run: |
           curl -L -o D:\W10UI\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
-      # BAIXAR DRIVER NVIDIA
+      # BAIXAR DRIVER
       # =========================
       - name: Baixar driver NVIDIA
         run: |
@@ -77,14 +77,14 @@ jobs:
           7z x D:\W10UI\nvidia.zip -oD:\W10UI\Drivers -y
 
       # =========================
-      # CRIAR INI (CORRETO)
+      # INI CORRETO (💣 AQUI ESTAVA O ERRO)
       # =========================
       - name: Criar W10UI.ini
         run: |
           (
           echo [W10UI]
           echo Target=D:\W10UI\install.wim
-          echo Repo=D:\W10UI\Updates
+          echo Repo=D:\W10UI
           echo AutoStart=1
           echo Silent=1
           echo AddUpdates=1
@@ -102,16 +102,12 @@ jobs:
           ) > D:\W10UI\W10UI.ini
 
       # =========================
-      # EXECUTAR W10UI (FIX REAL)
+      # EXECUTAR W10UI (SEM GAMBIARRA)
       # =========================
-      - name: Executar W10UI automático
+      - name: Executar W10UI
         run: |
           cd /d D:\W10UI
-
-          echo 0>input.txt
-          echo 0>>input.txt
-
-          cmd /c W10UI.cmd < input.txt
+          call W10UI.cmd
 
       # =========================
       # DETECTAR ISO FINAL
@@ -122,14 +118,14 @@ jobs:
           echo FINAL=%FINAL%>>%GITHUB_ENV%
 
       # =========================
-      # COMPACTAR ISO
+      # COMPACTAR
       # =========================
       - name: Compactar ISO
         run: |
           7z a -t7z -mx=9 -v1900m D:\W10UI\FINAL.7z "%FINAL%"
 
       # =========================
-      # UPLOAD RELEASE
+      # UPLOAD
       # =========================
       - name: Upload release
         uses: softprops/action-gh-release@v2
