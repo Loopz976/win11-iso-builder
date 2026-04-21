@@ -28,7 +28,7 @@ jobs:
           mkdir D:\W10UI\Updates
 
       # =========================
-      # EXTRAIR W10UI
+      # EXTRAIR W10UI DO REPO
       # =========================
       - name: Extrair W10UI
         run: |
@@ -77,7 +77,7 @@ jobs:
           7z x D:\W10UI\nvidia.zip -oD:\W10UI\Drivers -y
 
       # =========================
-      # CRIAR INI (AGORA CORRETO)
+      # CRIAR INI (CORRETO)
       # =========================
       - name: Criar W10UI.ini
         run: |
@@ -102,16 +102,16 @@ jobs:
           ) > D:\W10UI\W10UI.ini
 
       # =========================
-      # EXECUTAR W10UI (FORÇADO)
+      # EXECUTAR W10UI (FIX REAL)
       # =========================
       - name: Executar W10UI automático
         run: |
           cd /d D:\W10UI
 
-          (
-            echo 0
-            echo 0
-          ) | call W10UI.cmd
+          echo 0>input.txt
+          echo 0>>input.txt
+
+          cmd /c W10UI.cmd < input.txt
 
       # =========================
       # DETECTAR ISO FINAL
