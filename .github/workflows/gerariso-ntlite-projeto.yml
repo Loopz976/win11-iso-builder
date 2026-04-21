@@ -12,28 +12,32 @@ jobs:
         uses: actions/checkout@v4
 
       # =========================
-      # Baixar ISO (3 partes)
+      # Download ISO (3 partes)
       # =========================
       - name: Download ISO Parts
         run: |
-          mkdir ISO
-          cd ISO
+          New-Item -ItemType Directory -Path ISO
+          Set-Location ISO
           curl -L -o Win10.7z.001 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.001
           curl -L -o Win10.7z.002 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.002
           curl -L -o Win10.7z.003 https://github.com/Loopz976/ltsc-auto-builder/releases/download/w10-ltsc21h2-base-2/Win10LTSC21H2Base.7z.003
 
       # =========================
-      # Extrair ISO corretamente
+      # Extract ISO (FIX POWERHELL)
       # =========================
       - name: Extract ISO
         run: |
-          cd ISO
+          Set-Location ISO
           7z x Win10.7z.001 -y
-          mkdir ..\ISO_EXTRACTED
-          for %i in (*.iso) do 7z x "%i" -o"..\ISO_EXTRACTED" -y
+
+          New-Item -ItemType Directory -Path ../ISO_EXTRACTED -Force
+
+          Get-ChildItem -Filter *.iso | ForEach-Object {
+            7z x $_.FullName -o"../ISO_EXTRACTED" -y
+          }
 
       # =========================
-      # Baixar Projeto NTLite
+      # Download ProjetoNTLite
       # =========================
       - name: Download ProjetoNTLite
         run: |
@@ -44,21 +48,23 @@ jobs:
           7z x ProjetoNTLite.zip -oProjetoNTLite -y
 
       # =========================
-      # Rodar NTLite (CORRIGIDO)
+      # Run NTLite (FIX ARGUMENTO)
       # =========================
       - name: Run NTLite
         run: |
-          ProjetoNTLite\NTLite\NTLite.exe /silent /image:"ISO_EXTRACTED" /preset:"Preset\W10_19044_FINAL_NVIDIA_21_04_26.xml" /apply /save /exit
+          Start-Process "ProjetoNTLite\NTLite\NTLite.exe" `
+            -ArgumentList '/silent','/image:ISO_EXTRACTED','/preset:Preset\W10_19044_FINAL_NVIDIA_21_04_26.xml','/apply','/save','/exit' `
+            -Wait
 
       # =========================
-      # Criar ISO final
+      # Create ISO
       # =========================
       - name: Create ISO
         run: |
           oscdimg -bISO_EXTRACTED\boot\etfsboot.com -u2 -h -m -o ISO_EXTRACTED Win10LTSC_21.04.2026_NTLite_Actions.iso
 
       # =========================
-      # Dividir em partes 1900MB
+      # Split 1900MB
       # =========================
       - name: Split ISO
         run: |
