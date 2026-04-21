@@ -1,4 +1,4 @@
-name: LTSC W10UI AUTO BUILD FINAL
+name: LTSC W10UI FINAL AUTO
 
 on:
   workflow_dispatch:
@@ -28,7 +28,7 @@ jobs:
           mkdir D:\W10UI\Updates
 
       # =========================
-      # EXTRAIR W10UI DO REPO
+      # EXTRAIR W10UI (DO REPO)
       # =========================
       - name: Extrair W10UI
         run: |
@@ -48,14 +48,14 @@ jobs:
         run: |
           7z x D:\W10UI\base.7z.001 -oD:\W10UI -y
 
-      - name: Extrair ISO completa
+      - name: Extrair estrutura ISO
         run: |
           for %%i in (D:\W10UI\*.iso) do (
             7z x "%%i" -oD:\W10UI\DVD -y
           )
 
       # =========================
-      # PREPARAR TARGET
+      # PREPARAR INSTALL.WIM
       # =========================
       - name: Preparar install.wim
         run: |
@@ -69,7 +69,7 @@ jobs:
           curl -L -o D:\W10UI\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
-      # BAIXAR DRIVER
+      # BAIXAR DRIVER NVIDIA
       # =========================
       - name: Baixar driver NVIDIA
         run: |
@@ -77,30 +77,32 @@ jobs:
           7z x D:\W10UI\nvidia.zip -oD:\W10UI\Drivers -y
 
       # =========================
-      # INI AUTOMÁTICO (CORRIGIDO)
+      # CRIAR INI CORRETO (CRÍTICO)
       # =========================
       - name: Criar W10UI.ini
         run: |
           (
+          echo [W10UI]
           echo Target=D:\W10UI\install.wim
           echo Repo=D:\W10UI\Updates
           echo AutoStart=1
+          echo Silent=1
           echo AddUpdates=1
           echo AddDrivers=1
           echo Drv_Source=D:\W10UI\Drivers
           echo Net35=1
           echo Cleanup=1
           echo ResetBase=1
+          echo Rebuild=1
           echo ISO=1
           echo ISODir=D:\W10UI\ISO
           echo MountDir=D:\W10UI\MOUNT
           echo _CabDir=D:\W10UI\CAB
-          echo UseWimlib=1
           echo wim2esd=1
           ) > D:\W10UI\W10UI.ini
 
       # =========================
-      # RODAR W10UI
+      # EXECUTAR W10UI
       # =========================
       - name: Executar W10UI
         run: |
@@ -108,7 +110,7 @@ jobs:
           call W10UI.cmd
 
       # =========================
-      # DETECTAR ISO
+      # PEGAR ISO FINAL
       # =========================
       - name: Detectar ISO final
         run: |
