@@ -1,4 +1,4 @@
-name: LTSC BUILD FULL AUTO (DISM)
+name: LTSC FINAL BUILD STABLE
 
 on:
   workflow_dispatch:
@@ -26,8 +26,8 @@ jobs:
           mkdir D:\ISO
           mkdir D:\ISO\DVD
           mkdir D:\ISO\MOUNT
-          mkdir D:\ISO\Drivers
-          mkdir D:\ISO\Updates
+          mkdir D:\ISO\UPDATES
+          mkdir D:\ISO\DRIVERS
 
       # =========================
       # BAIXAR ISO BASE
@@ -41,17 +41,12 @@ jobs:
       - name: Extrair ISO
         run: |
           7z x D:\ISO\base.7z.001 -oD:\ISO -y
-
-      - name: Extrair estrutura ISO
-        run: |
-          for %%i in (D:\ISO\*.iso) do (
-            7z x "%%i" -oD:\ISO\DVD -y
-          )
+          for %%i in (D:\ISO\*.iso) do 7z x "%%i" -oD:\ISO\DVD -y
 
       # =========================
       # PREPARAR WIM
       # =========================
-      - name: Copiar install.wim
+      - name: Copiar WIM
         run: |
           copy D:\ISO\DVD\sources\install.wim D:\ISO\install.wim
 
@@ -60,15 +55,14 @@ jobs:
       # =========================
       - name: Baixar update
         run: |
-          curl -L -o D:\ISO\Updates\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
+          curl -L -o D:\ISO\update.msu https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2026/04/windows10.0-kb5082200-x64_3c40f2448161c62e043ee564f4ab9688117c06a6.msu
 
       # =========================
-      # BAIXAR DRIVER
+      # EXTRAIR MSU (CRÍTICO)
       # =========================
-      - name: Baixar driver NVIDIA
+      - name: Extrair MSU
         run: |
-          curl -L -o D:\ISO\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
-          7z x D:\ISO\nvidia.zip -oD:\ISO\Drivers -y
+          expand -F:* D:\ISO\update.msu D:\ISO\UPDATES
 
       # =========================
       # MONTAR IMAGEM
@@ -78,18 +72,22 @@ jobs:
           dism /Mount-Wim /WimFile:D:\ISO\install.wim /index:1 /MountDir:D:\ISO\MOUNT
 
       # =========================
-      # INTEGRAR UPDATE
+      # APLICAR CABs
       # =========================
-      - name: Integrar update
+      - name: Integrar CABs
         run: |
-          dism /Image:D:\ISO\MOUNT /Add-Package /PackagePath:D:\ISO\Updates
+          for %%i in (D:\ISO\UPDATES\*.cab) do (
+            dism /Image:D:\ISO\MOUNT /Add-Package /PackagePath:"%%i"
+          )
 
       # =========================
-      # INTEGRAR DRIVERS
+      # DRIVERS
       # =========================
-      - name: Integrar drivers
+      - name: Drivers NVIDIA
         run: |
-          dism /Image:D:\ISO\MOUNT /Add-Driver /Driver:D:\ISO\Drivers /Recurse
+          curl -L -o D:\ISO\nvidia.zip https://github.com/Loopz976/ltsc-auto-builder/releases/download/nvidia-driver-5/Display.Driver.zip
+          7z x D:\ISO\nvidia.zip -oD:\ISO\DRIVERS -y
+          dism /Image:D:\ISO\MOUNT /Add-Driver /Driver:D:\ISO\DRIVERS /Recurse
 
       # =========================
       # LIMPEZA PROFUNDA
@@ -106,17 +104,14 @@ jobs:
           dism /Unmount-Wim /MountDir:D:\ISO\MOUNT /Commit
 
       # =========================
-      # BAIXAR WIMLIB
+      # WIMLIB (COMPRESSÃO MÁXIMA)
       # =========================
       - name: Baixar wimlib
         run: |
           curl -L -o D:\wimlib.zip https://wimlib.net/downloads/wimlib-1.14.4-windows-x86_64-bin.zip
           7z x D:\wimlib.zip -oD:\wimlib -y
 
-      # =========================
-      # CONVERTER PRA ESD MAXIMO
-      # =========================
-      - name: Converter ESD (MAX)
+      - name: Converter ESD MAX
         run: |
           D:\wimlib\wimlib-imagex.exe export D:\ISO\install.wim all D:\ISO\DVD\sources\install.esd --compress=LZMS --solid
           del D:\ISO\DVD\sources\install.wim
@@ -130,7 +125,7 @@ jobs:
           7z x D:\oscdimg.zip -oD:\oscdimg -y
 
       # =========================
-      # CRIAR ISO FINAL
+      # GERAR ISO FINAL
       # =========================
       - name: Criar ISO
         run: |
@@ -146,7 +141,7 @@ jobs:
           7z a -t7z -mx=9 -v1900m D:\ISO\FINAL.7z D:\ISO\LTSC_FINAL.iso
 
       # =========================
-      # UPLOAD RELEASE
+      # UPLOAD
       # =========================
       - name: Upload
         uses: softprops/action-gh-release@v2
