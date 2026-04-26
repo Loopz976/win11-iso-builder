@@ -1,4 +1,4 @@
-name: W10 IOT LTSC 1288 EN-US  Features 2
+name: W10 Features On Demand 2004 Part2
 
 on:
   workflow_dispatch:
@@ -35,7 +35,7 @@ jobs:
         shell: cmd
         run: |
           for %%f in (*.iso) do (
-            echo %%f | findstr /i "7669fc91" >nul
+            echo %%f | findstr /i "fa276e78" >nul
             if not errorlevel 1 (
               move "%%f" output\
               cd output
