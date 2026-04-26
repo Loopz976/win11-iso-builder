@@ -1,4 +1,4 @@
-name: W10 IoT LTSC 1288 EN-US
+name: W10 IOT LTSC 1288 EN-US
 
 on:
   workflow_dispatch:
@@ -30,20 +30,21 @@ jobs:
 
           Set-Content "script_fixed.cmd" $content
 
+      # 🔥 AQUI ESTÁ A CORREÇÃO REAL
       - name: Run script
         shell: cmd
         continue-on-error: true
         run: |
-          echo F|call script_fixed.cmd
+          call script_fixed.cmd
 
       - name: Create output
         run: mkdir output
 
-      - name: Process IoT LTSC ISO
+      - name: Process IoT Enterprise LTSC ISO
         shell: cmd
         run: |
           for %%f in (*.iso) do (
-            echo %%f | findstr /i "257ad90f" >nul
+            echo %%f | findstr /i "iot enterprise ltsc en-us" >nul
             if not errorlevel 1 (
               move "%%f" output\
               cd output
@@ -57,7 +58,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: w10-iotltsc-1288-en-us
-          name: W10 IoT LTSC 1288 EN-US
+          name: W10 iotltsc 1288-enus
           files: output/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
