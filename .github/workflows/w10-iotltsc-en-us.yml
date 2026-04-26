@@ -47,7 +47,7 @@ jobs:
             if not errorlevel 1 (
               move "%%f" output\
               cd output
-              7z a -v1900m -mx=0 "w10-iot-ltsc-2021-en-us.7z" "%%f"
+              7z a -v1900m -mx=0 "w10-iotltsc-1288-en-us.7z" "%%f"
               del "%%f"
               cd ..
             )
@@ -56,8 +56,8 @@ jobs:
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: w10-iot-ltsc-2021-en-us
-          name: W10 IoT LTSC 2021 EN-US
+          tag_name: w10-iotltsc-1288-en-us
+          name: W10 IoT LTSC 1288 EN-US
           files: output/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
