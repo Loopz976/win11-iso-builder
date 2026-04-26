@@ -1,4 +1,4 @@
-name: W10 IOT LTSC EN-US 1288
+name: W10 IoT LTSC 1288 EN-US
 
 on:
   workflow_dispatch:
@@ -34,7 +34,7 @@ jobs:
         shell: cmd
         continue-on-error: true
         run: |
-          call script_fixed.cmd
+          echo F|call script_fixed.cmd
 
       - name: Create output
         run: mkdir output
@@ -43,11 +43,11 @@ jobs:
         shell: cmd
         run: |
           for %%f in (*.iso) do (
-            echo %%f | findstr /i "iot enterprise ltsc 2021 x64" >nul
+            echo %%f | findstr /i "257ad90f" >nul
             if not errorlevel 1 (
               move "%%f" output\
               cd output
-              7z a -v1900m -mx=0 "w10-iot-ltsc-1288-en-us.7z" "%%f"
+              7z a -v1900m -mx=0 "w10-iot-ltsc-2021-en-us.7z" "%%f"
               del "%%f"
               cd ..
             )
@@ -56,8 +56,8 @@ jobs:
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: w10-iot-ltsc-1288-en-us
-          name: W10 IoT LTSC 1288 EN-US
+          tag_name: w10-iot-ltsc-2021-en-us
+          name: W10 IoT LTSC 2021 EN-US
           files: output/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
