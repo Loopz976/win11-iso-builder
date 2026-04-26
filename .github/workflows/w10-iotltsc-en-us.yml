@@ -1,4 +1,4 @@
-name: W10 IOT LTSC 1288 EN-US
+name: W10 IoT LTSC 1288 EN-US
 
 on:
   workflow_dispatch:
@@ -16,39 +16,30 @@ jobs:
       - name: Extract script
         run: tar -xf w10-iotltsc-1288-en-us.zip
 
-      - name: Fix script (safe)
+      - name: Find correct CMD
         shell: powershell
         run: |
-          $file = Get-ChildItem -Filter *.cmd | Select-Object -First 1
-          $content = Get-Content $file.FullName -Raw
+          $file = Get-ChildItem -Recurse -Filter *.cmd | Where-Object { $_.Name -notlike "*W10UI*" } | Select-Object -First 1
+          Copy-Item $file.FullName script_fixed.cmd
 
-          $content = $content -replace 'CHOICE /c fs.*', 'set ListSel=F'
-          $content = $content -replace 'rd>nul /s /q "%dir_temp%"', 'rd /s /q "%dir_temp%" 2>nul'
-          $content = $content -replace 'timeout>nul /t 10', 'timeout /t 1 >nul'
-
-          $content = $content + "`r`nexit /b 0`r`n"
-
-          Set-Content "script_fixed.cmd" $content
-
-      # 🔥 AQUI ESTÁ A CORREÇÃO REAL
       - name: Run script
         shell: cmd
         continue-on-error: true
         run: |
-          call script_fixed.cmd
+          echo F|call script_fixed.cmd
 
       - name: Create output
         run: mkdir output
 
-      - name: Process Consumer ISO
+      - name: Move ISO directly
         shell: cmd
         run: |
           for %%f in (*.iso) do (
-            echo %%f | findstr /i "consumer pt-br" >nul
+            echo %%f | findstr /i "257ad90f" >nul
             if not errorlevel 1 (
               move "%%f" output\
               cd output
-              7z a -v1900m -mx=0 "w10-ltsc-1288.7z" "%%f"
+              7z a -v1900m -mx=0 "w10-iotltsc-1288-en-us.7z" "%%f"
               del "%%f"
               cd ..
             )
@@ -58,7 +49,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: w10-iotltsc-1288-en-us
-          name: W10 iotltsc 1288 en-us
+          name: W10 IoT LTSC 1288 EN-US
           files: output/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
