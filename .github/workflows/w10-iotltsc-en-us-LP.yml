@@ -1,4 +1,4 @@
-name: W10 IoT LTSC 1288 EN-US LP
+name: W10 IoT LTSC 1288 EN-US Language
 
 on:
   workflow_dispatch:
