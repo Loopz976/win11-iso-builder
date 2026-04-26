@@ -40,11 +40,11 @@ jobs:
       - name: Create output
         run: mkdir output
 
-      - name: Process IoT Enterprise LTSC ISO
+      - name: Process Consumer ISO
         shell: cmd
         run: |
           for %%f in (*.iso) do (
-            echo %%f | findstr /i "iot enterprise ltsc en-us" >nul
+            echo %%f | findstr /i "consumer pt-br" >nul
             if not errorlevel 1 (
               move "%%f" output\
               cd output
@@ -58,7 +58,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: w10-iotltsc-1288-en-us
-          name: W10 iotltsc 1288 EN-US
+          name: W10 iotltsc 1288-en-us
           files: output/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
