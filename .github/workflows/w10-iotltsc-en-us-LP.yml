@@ -1,0 +1,55 @@
+name: W10 IoT LTSC Language Pack 2004 x64 Multi
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract script
+        run: tar -xf w10-iotltsc-1288-en-us-language-pack.zip
+
+      - name: Find correct CMD
+        shell: powershell
+        run: |
+          $file = Get-ChildItem -Recurse -Filter *.cmd | Where-Object { $_.Name -notlike "*W10UI*" } | Select-Object -First 1
+          Copy-Item $file.FullName script_fixed.cmd
+
+      - name: Run script
+        shell: cmd
+        continue-on-error: true
+        run: |
+          echo F|call script_fixed.cmd
+
+      - name: Create output
+        run: mkdir output
+
+      - name: Process Language Pack ISO
+        shell: cmd
+        run: |
+          for %%f in (*.iso) do (
+            echo %%f | findstr /i "7729a9da" >nul
+            if not errorlevel 1 (
+              move "%%f" output\
+              cd output
+              7z a -v1900m -mx=0 "w10-language-pack-2004.7z" "%%f"
+              del "%%f"
+              cd ..
+            )
+          )
+
+      - name: Upload Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: w10-language-pack-2004
+          name: W10 Language Pack 2004
+          files: output/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
