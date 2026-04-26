@@ -1,4 +1,4 @@
-name: W10 IoT LTSC EN-US 1288
+name: W10 IOT LTSC EN-US 1288
 
 on:
   workflow_dispatch:
