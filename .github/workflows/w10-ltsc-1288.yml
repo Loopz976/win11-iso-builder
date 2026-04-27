@@ -1,4 +1,4 @@
-name: W10 LTSC 1288
+name: W10 Enterprise LTSC 1288
 
 on:
   workflow_dispatch:
