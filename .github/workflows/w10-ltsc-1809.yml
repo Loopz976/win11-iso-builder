@@ -1,4 +1,4 @@
-name: Build LTSC 2019 PTBR ISO (DVP FINAL)
+name: W10 Enterprise LTSC 1809
 
 on:
   workflow_dispatch:
