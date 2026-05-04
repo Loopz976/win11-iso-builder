@@ -1,0 +1,52 @@
+name: Build LTSC 2019 PTBR ISO (DVP FINAL)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Preparar pastas
+      run: |
+        mkdir C:\build
+        mkdir C:\build\out
+
+    - name: Baixar ISO base (EN)
+      run: |
+        curl -L "https://zerofs.link/f/gw2CD6ponn7Sy29DjwgZCL/" -o C:\build\base.iso
+
+    - name: Baixar patch DVP PT-BR
+      run: |
+        curl -L "https://zerofs.link/f/SkRCGLHjMCtWthKoNdz5Ds/" -o C:\build\ptbr.dvp
+
+    - name: Baixar DumbVersion (oficial)
+      run: |
+        curl -L "https://github.com/thecatontheceiling/DumbVersion/releases/latest/download/win-x64.zip" -o C:\build\patcher.zip
+        7z x C:\build\patcher.zip -oC:\build\patcher
+
+    - name: Executar patcher
+      run: |
+        cd C:\build
+        for %%f in (patcher\DumbVersionPatcher*.exe) do %%f -bulk . . -o .
+
+    - name: Localizar ISO gerada
+      shell: cmd
+      run: |
+        for /r C:\build %%i in (*.iso) do set ISO=%%i
+        echo ISO=%ISO%>> %GITHUB_ENV%
+
+    - name: Compactar ISO em partes de 1900MB
+      run: |
+        7z a -v1900m C:\build\out\windows_ltsc2019_ptbr.7z %ISO%
+
+    - name: Criar Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ltsc2019-ptbr
+        name: Windows LTSC 2019 PT-BR
+        files: C:\build\out\*
