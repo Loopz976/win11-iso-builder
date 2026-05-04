@@ -1,4 +1,4 @@
-name: Build LTSC 2019 PTBR ISO (DVP FINAL FIXED)
+name: Build LTSC 2019 PTBR ISO (DVP FINAL)
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ jobs:
         mkdir C:\build
         mkdir C:\build\out
 
-    - name: Baixar ISO base
+    - name: Baixar ISO base (EN)
       run: |
         powershell -Command "Invoke-WebRequest 'https://zerofs.link/f/gw2CD6ponn7Sy29DjwgZCL/' -OutFile 'C:\build\base.iso'"
 
@@ -31,15 +31,16 @@ jobs:
     - name: Executar patcher
       run: |
         cd C:\build
-        patcher.exe -bulk . . -o .
+        .\patcher.exe -bulk . . -o .
 
     - name: Localizar ISO gerada
       shell: cmd
       run: |
+        setlocal enabledelayedexpansion
         for /r C:\build %%i in (*.iso) do set ISO=%%i
         echo ISO=%ISO%>> %GITHUB_ENV%
 
-    - name: Compactar ISO em partes 1900MB
+    - name: Compactar ISO em partes de 1900MB
       run: |
         7z a -v1900m C:\build\out\windows_ltsc2019_ptbr.7z %ISO%
 
