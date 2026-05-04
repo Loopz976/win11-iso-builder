@@ -1,4 +1,4 @@
-name: W10 Enterprise LTSC 1809
+name: Build LTSC 2019 PTBR ISO (DVP FINAL FIXED)
 
 on:
   workflow_dispatch:
@@ -16,23 +16,22 @@ jobs:
         mkdir C:\build
         mkdir C:\build\out
 
-    - name: Baixar ISO base (EN)
+    - name: Baixar ISO base
       run: |
-        curl -L "https://zerofs.link/f/gw2CD6ponn7Sy29DjwgZCL/" -o C:\build\base.iso
+        powershell -Command "Invoke-WebRequest 'https://zerofs.link/f/gw2CD6ponn7Sy29DjwgZCL/' -OutFile 'C:\build\base.iso'"
 
-    - name: Baixar patch DVP PT-BR
+    - name: Baixar DVP pt-BR
       run: |
-        curl -L "https://zerofs.link/f/SkRCGLHjMCtWthKoNdz5Ds/" -o C:\build\ptbr.dvp
+        powershell -Command "Invoke-WebRequest 'https://zerofs.link/f/SkRCGLHjMCtWthKoNdz5Ds/' -OutFile 'C:\build\ptbr.dvp'"
 
-    - name: Baixar DumbVersion (oficial)
+    - name: Baixar DumbVersion Patcher
       run: |
-        curl -L "https://github.com/thecatontheceiling/DumbVersion/releases/latest/download/win-x64.zip" -o C:\build\patcher.zip
-        7z x C:\build\patcher.zip -oC:\build\patcher
+        powershell -Command "Invoke-WebRequest 'https://github.com/thecatontheceiling/DumbVersion/releases/download/v1.2.2/DumbVersionPatcher-win-x64.exe' -OutFile 'C:\build\patcher.exe'"
 
     - name: Executar patcher
       run: |
         cd C:\build
-        for %%f in (patcher\DumbVersionPatcher*.exe) do %%f -bulk . . -o .
+        patcher.exe -bulk . . -o .
 
     - name: Localizar ISO gerada
       shell: cmd
@@ -40,7 +39,7 @@ jobs:
         for /r C:\build %%i in (*.iso) do set ISO=%%i
         echo ISO=%ISO%>> %GITHUB_ENV%
 
-    - name: Compactar ISO em partes de 1900MB
+    - name: Compactar ISO em partes 1900MB
       run: |
         7z a -v1900m C:\build\out\windows_ltsc2019_ptbr.7z %ISO%
 
